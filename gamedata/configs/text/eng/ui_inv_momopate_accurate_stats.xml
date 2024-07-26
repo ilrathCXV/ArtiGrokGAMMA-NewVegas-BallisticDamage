@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+	
+	<string id="st_mp_hreg">			<text>% health / min</text>			</string>
+	<string id="st_mp_hreg2">			<text>% health / sec</text>			</string>
+	<string id="st_mp_breg">			<text>ml / sec</text>				</string>
+	<string id="st_mp_sreg">			<text>kcal eq. / min</text> 		</string>
+	<string id="st_mp_power">			<text>Stamina recovery</text>		</string>
+	
+	<string id="st_mp_a_dmg">			<text>Damage mod.</text>			</string>
+	<string id="st_mp_a_ap">			<text>Armor penetration</text>		</string>
+	<string id="st_mp_a_buck">			<text>Projectile count</text>		</string>
+	<string id="st_mp_a_acc">			<text>Dispersion mod.</text>		</string>
+	<string id="st_mp_a_vel">			<text>Velocity mod.</text>			</string>
+	<string id="st_mp_a_dist">			<text>Range mod.</text>				</string>
+	<string id="st_mp_a_airres">		<text>Falloff strength</text>		</string>
+	<string id="st_mp_a_impair">		<text>Degradation mod.</text>		</string>
+	<string id="st_mp_a_impulse">		<text>Impulse mod.</text>			</string>
+	<string id="st_mp_a_bsize">			<text>Bullet size</text>			</string>
+	<string id="st_mp_a_nopen">			<text>Concussion penalty</text>		</string>
+	<string id="st_mp_a_recoil">		<text>Recoil mod.</text>			</string>
+	<string id="st_mp_mm">				<text>mm</text>						</string>
+	<string id="st_mp_ap">				<text>DT</text>						</string>
+	
+	<string id="st_mp_damage">			<text>damage</text>					</string>
+	
+	<string id="st_mp_knife_dmg_1">		<text>Light attack</text>			</string>
+	<string id="st_mp_knife_dmg_2">		<text>Heavy attack</text>			</string>
+	<string id="st_mp_knife_range">		<text>Reach</text>					</string>
+	<string id="st_mp_knife_range_2">	<text>Heavy atk. reach</text>		</string>
+	<string id="st_mp_knife_ap">		<text>Armor penetration</text>		</string>
+	
+	<string id="st_mp_explo_dmg_1">		<text>Blast damage</text>			</string>
+	<string id="st_mp_explo_dmg_2">		<text>Shrapnel damage</text>		</string>
+	<string id="st_mp_explo_frags">		<text>Shrapnel count</text>			</string>
+	<string id="st_mp_explo_range_1">	<text>Blast range</text>			</string>
+	<string id="st_mp_explo_range_2">	<text>Shrapnel range</text>			</string>
+	<string id="st_mp_explo_ap_2">		<text>Blast AP</text>				</string>
+	<string id="st_mp_explo_ap_2">		<text>Shrapnel AP</text>			</string>
+	
+	<string id="st_mp_w_ammo">			<text>rounds</text>					</string>
+	<string id="st_mp_w_degr">			<text>Degradation res.</text>		</string>
+	<string id="st_mp_w_dynzoom">		<text>Adjustable zoom</text>		</string>
+	<string id="st_mp_w_dynzoom_y">		<text>Available</text>				</string>
+	<string id="st_mp_w_dynzoom_n">		<text>Unavailable</text>			</string>
+	<string id="st_mp_w_maxzoom">		<text>Max magnification</text>		</string>
+	<string id="st_mp_w_sway">			<text>Sway strength</text>			</string>
+	
+	<string id="st_mp_stat_title">		<text>[SYSTEM] INITIALIZE BODY SCAN </text>		</string>
+	<string id="st_mp_stat_balls">		<text>BALLISTIC</text>				</string>
+	<string id="st_mp_stat_balls_o">	<text>BODY</text>					</string>
+	<string id="st_mp_stat_balls_h">	<text>HEAD</text>					</string>
+	<string id="st_mp_stat_burn">		<text>THERMAL</text>				</string>
+	<string id="st_mp_stat_shock">		<text>ELECTRIC</text>				</string>
+	<string id="st_mp_stat_chemburn">	<text>CHEMICAL</text>				</string>
+	<string id="st_mp_stat_radiation">	<text>RADIATION</text>				</string>
+	<string id="st_mp_stat_telepatic">	<text>PSYCHIC</text>				</string>
+	<string id="st_mp_stat_wound">		<text>RUPTURE</text>				</string>
+	<string id="st_mp_stat_strike">		<text>IMPACT</text>					</string>
+	<string id="st_mp_stat_explosion">	<text>EXPLOSIVE</text>				</string>
+	<string id="st_mp_stat_power">		<text>STAMINA REGEN.</text>			</string>
+
+</string_table>
