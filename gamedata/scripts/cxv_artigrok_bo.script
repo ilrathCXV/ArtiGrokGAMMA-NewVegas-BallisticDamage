@@ -934,6 +934,11 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local ammo_list = utils_item.get_ammo(sec, wpn_id)
 	local ammo_section = ammo_list[ammo_type_number+1]
 	local wpn_hit_power = ui_wpn_params.read_float(sec, "", "hit_power")
+	local wpn_kind = nil
+	
+	if is_actor then
+		wpn_kind = ini_sys:r_string(sec, "kind") or nil
+	end
 	
 	local silencer_boost = 1
 	
@@ -1259,22 +1264,19 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local custom_bone_dmg_mult = custom_bone_dmg[custom_bone_id]
 	local custom_bone_ap_scale = custom_bone_ap[custom_bone_id]
 	local custom_bone_hitfraction = custom_bone_hf[custom_bone_id]
-
+	
+	-- ilrathCXV (07/26/24): Shotgun AP bonuses now appropriately and proportionally given to multi-pellet/multi-projectile ammo
 	if tonumber(bone_ap_boost) >= 3 and tonumber(bone_id) <= 9 then -- leg meta, bullets ap boost in legs
-		if ammo_section == "ammo_12x70_buck" or ammo_section == "ammo_12x70_buck_bad" or ammo_section == "ammo_12x76_zhekan_bad" or
-		   ammo_section == "ammo_20x70_buck" or ammo_section == "ammo_20x70_buck_bad" or ammo_section == "ammo_23x75_shrapnel" or
-		   ammo_section == "ammo_23x75_shrapnel_bad" or ammo_section == "ammo_20x70_devastator_bad" then
-			k_ap = ( k_ap + 0.013 )
+		if pellet_count > 1 then
+			k_ap = ( k_ap + round_idp((0.18 / pellet_count), 3) )	-- 0.02 -- 0.013
 		else
-			k_ap = ( k_ap + (0.075 * leg_meta_sniper_null) )
+			k_ap = ( k_ap + (0.013 * leg_meta_sniper_null) )	-- 0.075
 		end
 	end
 
 	if tonumber(bone_ap_boost) >= 16 and tonumber(bone_ap_boost) <= 19 or tonumber(bone_ap_boost) == 14 then -- headshot bonus on unprotected parts
-		if ammo_section == "ammo_12x70_buck" or ammo_section == "ammo_12x70_buck_bad" or ammo_section == "ammo_12x76_zhekan_bad" or
-		   ammo_section == "ammo_20x70_buck" or ammo_section == "ammo_20x70_buck_bad" or ammo_section == "ammo_23x75_shrapnel" or
-		   ammo_section == "ammo_23x75_shrapnel_bad" or ammo_section == "ammo_20x70_devastator_bad" then
-			k_ap = ( k_ap + 0.019 )
+		if pellet_count > 1 then
+			k_ap = ( k_ap + round_idp((0.171 / pellet_count), 3) )	-- 0.019
 		else
 			k_ap = ( k_ap + 0.040 )
 		end
@@ -1442,10 +1444,11 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-----------------------
 	-- Chance to force-stun target + increase in residual concussion damage based on chance (10% chance = 10% bonus to concussion damage)
 	local flinch_stun_chance = 0
+	local flinch_mult = 1
 	if (special_effect == "flinch") or (special_effect_2 == "flinch") then
 		flinch_stun_chance = ini_ammo:r_float_ex(ammo_section, "flinch") or 10
 		arti_handlers.stun_npc(npc,flinch_stun_chance)
-		flinch_stun_chance = flinch_stun_chance * 0.01
+		flinch_mult = flinch_stun_chance * 0.01
 	end
 	
 	
@@ -1497,7 +1500,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	--					- DR (damage resistance) = custom_bone_ap_scale * Sin Res (multiplicative like New Vegas, capped at 85%)
 	--					- DT (damage threshold) = custom_bone_armor
 	--					- AmmoDT = k_ap & various adjusters from GAMMA (no change from normal calcs)
-	--					- AmmoDT_mult = 0.80 (Grok: last multiplier is a new adjustment after the bone grouping update)
+	--					- [NOT USED] AmmoDT_mult = 0.80 (Grok: last multiplier is a new adjustment after the bone grouping update)
 	--					- CritDMG = x2 if NPC is surrendering
 	--		Final Damage values:
 	--					- LM (locational damage) = (custom_bone_dmg_mult * 1.1) & sniper_bad_bone_shit_reduce
@@ -1517,8 +1520,22 @@ function npc_on_before_hit(npc, shit, bone_id)
 		falloff_modifier		= 1.0 / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 )))
 	end
 	
+	-- ilrathCXV (07/26/24): Necessary evil - most weapons in New Vegas have very low damage compared to the damage values we have for weapons.
+	--						 So, to better mimic them but not bring them down so much as to make them pea-shooters, overall weapon power will be reduced by 25%.
+	--						 Shotguns will be less affected.
+	
+	if is_actor then 
+		if wpn_kind == "w_shotgun" then
+			wpn_hit_power = wpn_hit_power * 0.85
+		else
+			wpn_hit_power = wpn_hit_power * 0.75
+		end
+	else
+		wpn_hit_power = wpn_hit_power * 0.75
+	end
+	
 	starter_damage = wpn_hit_power * falloff_modifier * barrel_condition_corrected * silencer_boost
-	-- printf('(1) Starter Damage: %s | Weapon Power: %s | Falloff modifier: %s | Barrel Cond: %s | Silencer Boost: %s', starter_damage, wpn_hit_power, falloff_modifier, barrel_condition_corrected, silencer_boost)
+	printf('(1) Starter Damage: %s | Adjusted Weapon Power: %s | Falloff modifier: %s | Barrel Cond: %s | Silencer Boost: %s', starter_damage, wpn_hit_power, falloff_modifier, barrel_condition_corrected, silencer_boost)
 	
 -- ///// (2) Resist DMG calculations /////
 	local resist_damage = starter_damage
@@ -1534,15 +1551,14 @@ function npc_on_before_hit(npc, shit, bone_id)
 		total_resist_modifier = (sin_res * custom_bone_ap_scale) or 1
 		total_resist_modifier = math.max(total_resist_modifier, (1 - resist_limiter))	-- clamp(total_resist_modifier, (1 - resist_limiter), 3)
 	end
-	printf('Faction Resist: %s | Custom Bone AP Scale: %s | Total Resist before adj.: %s', sin_res, custom_bone_ap_scale, total_resist_modifier)
 	
-	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) * 0.80
+	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) -- * 0.80
 	
 	local remaining_dmg_threshold = math.max(0, custom_bone_armor - k_ap)
 	
 	resist_damage = math.max((starter_damage * 0.2), ((resist_damage * total_resist_modifier) - remaining_dmg_threshold))
 	
-	-- printf('(2) Resist Damage: %s | Base DT: %s | AP Power: %s | Real DT: %s | Real DR: %s', resist_damage, custom_bone_armor, k_ap, remaining_dmg_threshold, total_resist_modifier)
+	printf('(2) Resist Damage: %s | Base DT: %s | AP Power: %s | Real DT: %s | Real DR: %s', resist_damage, custom_bone_armor, k_ap, remaining_dmg_threshold, total_resist_modifier)
 	
 -- ///// (3) Final Base DMG calculations /////
 	local final_base_damage = resist_damage
@@ -1570,14 +1586,8 @@ function npc_on_before_hit(npc, shit, bone_id)
 		fx:play_at_pos(pos)	
 	end
 	
-	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
-	local total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce
-	local difficulty_modifier = ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) or 1
-	
-	final_base_damage = math.max(((0.01 * flinch_stun_chance)/pellet_count), final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_modifier)
-	
-	-- ilrathCXV (07/26/24): If their bone's DT has been overcome (within 5 DT of their max), it will stay broken for 5 seconds
-	if new_remaining_threshold <= 0.05 then
+	-- ilrathCXV (07/26/24): If their bone's DT has been overcome, it will stay broken for 5 seconds
+	if new_remaining_threshold <= 0 then
 		final_base_damage = final_base_damage + armorbuster_acid_effect_bonus
 		-- ilrathCXV (07/26/24): If their bone's DT has been overcome, it will stay broken for 5 seconds
 		custom_bone_value[custom_bone_id] = 0
@@ -1591,6 +1601,17 @@ function npc_on_before_hit(npc, shit, bone_id)
 		npc_broken_dt[npc:id()] = (npc_broken_dt[npc:id()] and npc_broken_dt[npc:id()] + 1) or 1
 		CreateTimeEvent("reduce_npc_broken"..npc:id()..math.random(1,100), npc:id(), 5.0, reduce_npc_broken, npc:id())
 	end
+	
+	-- ilrathCXV (07/26/24): If there is not a full pen. hit, subtract the remaining DT from the current damage
+	if new_remaining_threshold > 0 then
+		final_base_damage = math.max(0.0025, (final_base_damage - new_remaining_threshold))
+	end
+	
+	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
+	local difficulty_modifier = ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) or 1
+	
+	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_modifier
+	final_base_damage = math.max(final_base_damage, ((0.01 * flinch_mult)/pellet_count))
 	
 	-- Add even more feedback on headshots (base GAMMA)
 	if (new_remaining_threshold <= 0) and headBones[bone_id] then
@@ -1608,16 +1629,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 			end
 		end
 	end
-
-	-- ilrathCXV (07/26/24): If the player is within 0.5 BR tier (5 AP points) of breaking the enemy's DT, the player's post damage will have a floor of 20% of resist damage (might change)
-	if new_remaining_threshold <= 0.05 then
-		if final_base_damage < (resist_damage * 0.2) then
-			final_base_damage = resist_damage * 0.2
-		end
-	end
 	
-	printf('Final Base Damage: %s | Enemy DT: %s | Enemy DR: %s% | Real AP: %s | Threshold Forgiveness?: %s | Extra AP needed to break DT: %s', final_base_damage, custom_bone_armor, ((1 - total_resist_modifier) * 100), k_ap, (new_remaining_threshold < 0.1), new_remaining_threshold)
-
+	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_modifier, new_remaining_threshold)
+	
 	-- ilrathCXV (07/25/24): Now plug final damage into shit.damage
 	shit.power = final_base_damage
 	
@@ -1920,8 +1934,6 @@ function reset_dmg_threshold(custom_bone_id, custom_bone_armor, npc_id)
 		custom_bone_value[custom_bone_id] = custom_bone_armor
 		custom_bone_broken_dt[custom_bone_id] = nil
 	end
-	
-	npc_broken_dt[npc_id] = nil
 	
 	return true
 end
