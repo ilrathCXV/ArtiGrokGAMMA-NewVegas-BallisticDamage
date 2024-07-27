@@ -1610,6 +1610,11 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
 	local difficulty_modifier = ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) or 1
 	
+	total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce
+	if new_remaining_threshold > 0 then
+		total_locational_modifier = math.min(total_locational_modifier, 2.0)
+	end
+	
 	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_modifier
 	final_base_damage = math.max(final_base_damage, ((0.01 * flinch_mult)/pellet_count))
 	
