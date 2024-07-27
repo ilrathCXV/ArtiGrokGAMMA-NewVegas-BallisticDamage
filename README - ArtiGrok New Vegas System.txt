@@ -67,10 +67,12 @@ Here is a handy thing to remember in this case as these values aren't too clear 
 
 The higher the value, the less damage it blocks (anything above 1.0 will grant MORE damage to be caused).
 The lower the value, the more damage it blocks.
-Ammo with the Basher effect ore Headhunter effect tha land a headshot, they will skip this step.
-
-	total_resist_modifier = custom_bone_ap_scale * sin_res
-	total_resist_modifier = max(total_resist_modifier, 0.15) --> 0.15 = 85% DR | This ensures that if the total DR modifier goes below 0.15/the DR is above 85%, it gets capped out
+Ammo/melee weapons with the Basher effect or Headhunter effect that land a headshot will skip this step (ignore_resistances = 1).
+	
+	if ignore_resistances == 0 then
+		total_resist_modifier = (sin_res * custom_bone_ap_scale) or 1
+		total_resist_modifier = math.max(total_resist_modifier, 0.15) --> 0.15 = 85% DR | This ensures that if the total DR modifier goes below 0.15/the DR is above 85%, it gets capped out
+	end
 	
 	(isg_res is not included in here as that pertains to AP power, which is handled with DT calculations)
 	
@@ -127,8 +129,9 @@ For the Locational Multiplier, it will be capped to 2.0 if the victim's DT was n
 
 Currently, some weapons that weren't breaking DT/full pen., they would still do a good amount of damage to where you could spray an armored enemy with HP to win.
 To counteract this, we take the remaining DT and apply it again, with the damage having a floor of 0.25 Damage (0.0025).
+Ammo/melee weapons with the Headhunter effect that land a headshot will skip this step to avoid them being useless against targets like Eidelon (ignore_high_armor_resist = 1).
 
-	if new_remaining_threshold > 0 then
+	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
 		final_base_damage = math.max(0.0025, (final_base_damage - new_remaining_threshold))
 	end
 

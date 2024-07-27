@@ -1569,7 +1569,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local hp_penality_modifier = 1
 	local new_remaining_threshold = (remaining_dmg_threshold - armorbuster_acid_effect_bonus)
 	
-	if new_remaining_threshold > 0 then
+	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
 		hp_penality_modifier = (1/hp_no_penetration_penalty) or 1
 		
 		-- base GAMMA no-pen feedback
@@ -1603,14 +1603,15 @@ function npc_on_before_hit(npc, shit, bone_id)
 	end
 	
 	-- ilrathCXV (07/26/24): If there is not a full pen. hit, subtract the remaining DT from the current damage
-	if new_remaining_threshold > 0 then
+	--						 Headhunter/Basher headshots will skip this step
+	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
 		final_base_damage = math.max(0.0025, (final_base_damage - new_remaining_threshold))
 	end
 	
 	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
 	local difficulty_modifier = ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) or 1
 	
-	total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce
+	local total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce
 	if new_remaining_threshold > 0 then
 		total_locational_modifier = math.min(total_locational_modifier, 2.0)
 	end
@@ -1628,7 +1629,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- ilrathCXV (07/26/24): If the player has broken a part of the enemy's DT, this enables a larger floor for allowed damage when hitting body parts that haven't been broken
 	if npc_broken_dt[npc:id()] then
 		if npc_broken_dt[npc:id()] > 0 then
-			printf('Enemy DT is broken! Checking if low DMG needs to be increased...')
+			-- printf('Enemy DT is broken! Checking if low DMG needs to be increased...')
 			if final_base_damage <= 0.01 then
 				final_base_damage = math.max(0.01, final_base_damage * broken_dt_modifier)
 			end
