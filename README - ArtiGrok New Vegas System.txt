@@ -58,7 +58,7 @@ This is where things stop being simple. The process to find the Resist Damage va
 
 Firstly, we apply the "CritDMG"/Surrender Bonus that GAMMA gives. This is only applied if the enemy is in a surrendering state.
 	
-	resist_damage = resistance * 2.0
+	resist_damage = resist_damage * 2.0
 	
 Secondly, we find the total multiplicative amount of DR the enemy has. This will always be capped at 85% (or a modifier of 15%).
 For enemies, their DR rarely reaches that high, but it is necessary. DR can result in granting more damage if the victim has been given a "Sin Res"/faction resistance value higher than 1.0.
@@ -90,11 +90,27 @@ An enemy's DT will NOT be reduced on non-penetrating hits., but it will be nulli
 Determining if a limb's DT was broken/penetrated will be discussed in the next damage section.
 
 	remaining_dmg_threshold = math.max(0, custom_bone_armor - k_ap)
+	
+If we have a hit that doesn't break/penetrate the target's limb's DT, we will increase the remaining DT by the HP penality multiplier to further punish
+using HP ammo. HP ammo in New Vegas tends to multiply DT as well to balance, so this is essentially doing the same thing but not as punishing.
+We will then also find the non-pen. penalty we will use for the Final Base Damage. If no penalty will do nothing if you do penetrate the target's DT.
+
+	if remaining_dmg_threshold > 0 then
+		hp_penality_modifier = (1/hp_no_penetration_penalty) or 1
+		remaining_dmg_threshold = remaining_dmg_threshold * hp_no_penetration_penalty
+	end
+	
+	(hp_no_penetration_penalty is the base value that is usually above 1, hp_penality_modifier is the result to find the reduction)
+
+One more step needs to be done before we do the final calculations: we need to apply the DR to the current damage amount. We then take 20% of that as the 
+damage floor in the final Resist Damage.
+
+	resist_damage = resist_damage * total_resist_modifier
 
 Finally, we input all of the components and solve for the Resist Damage.
 NOTE: Following New Vegas Logic, DR and DT together will NEVER cause Resist Damage to fall below 20% of the Starter Damage.
 
-	resist_damage = math.max((starter_damage * 0.2), ((resist_damage * total_resist_modifier) - remaining_dmg_threshold))
+	resist_damage = math.max((resist_damage * 0.2), ((resist_damage * total_resist_modifier) - remaining_dmg_threshold))
 	
 /////////////////////////////////
 /////// Final Base Damage ///////
@@ -114,11 +130,6 @@ We then use those values to further decreased the remaining DT the enemy has aft
 	
 	armorbuster_acid_effect_bonus = (armor_break_bonus * armor_break_mult) or 0
 	new_remaining_threshold = remaining_dmg_threshold - armorbuster_acid_effect_bonus
-	
-We will then get to find any non-pen. penalties to rounds that suffer from them (i.e. most HP rounds). This is to discourage spamming incorrect ammo.
-If no penalty exists OR the hit did penetrate the new remaining DT, this modifier will not affect damage.
-
-		hp_penality_modifier = (1/hp_rounds) or 1
 
 For the Locational Multiplier, it will be capped to 2.0 if the victim's DT was not destroyed/penetrated. This is mostly seen on headshots as it tends to be well above 2.0.
 

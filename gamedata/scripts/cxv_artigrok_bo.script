@@ -373,7 +373,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	bone_mult			= 1
 	is_critical			= false
 	
-	printf("///////////   Mutant Hit registered: ArtiGrok BO v2.0.1 + NV   //////////////////")
+	printf("///////////   Mutant Hit registered: ArtiGrok BO v2.0.3 + NV   //////////////////")
 	printf('%s about to be hit by %s in bone %s', monster and monster:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 
 	if (string.match(sec, "knife")) then
@@ -917,12 +917,13 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 	local is_actor = false
 	if shit.draftsman:id() == db.actor:id() then
+		bone_clear_time = time_global() + cxv_tick	-- reset the timer on clearing the bone tables
 		is_actor = true
 	end
 	
 -- ////// Now, all of the GAMMA GBO + ArtiGrok stuff //////
 	
-	printf("///////////   Stalker Hit registered: ArtiGrok BO v2.0.1 + NV  //////////////////")
+	printf("///////////   Stalker Hit registered: ArtiGrok BO v2.0.3 + NV  //////////////////")
 	printf('%s about to be hit by %s in bone %s', npc and npc:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 	
 --////////////// DATA PARSING OF HELL - A BONES AND BOOLETS TALE //////////////
@@ -1473,20 +1474,33 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- For pistols and shotguns, they start at 50m (will have around 20.3% mult at 100m)
 	local grav_mult = 1.0
 	if (special_effect == "grav") or (special_effect_2 == "grav") then
-		if dist >= 50 then
+		if is_actor then
 			local wpn_type = ini_sys:r_string(wpn:section(), "kind") or nil
-			if wpn_type then
-				if wpn_type == "w_pistol" or string.find(wpn:section(), "vz61") or string.find(wpn:section(), "kiparis")
-				or wpn_type == "w_shotgun" then
-					grav_mult = (1 + clamp((dist - 49) * 0.003984, 0, 1)) or 1
-					k_ap = k_ap * grav_mult
-					printf("Grav in effect @ distance of %s meters for %sx mult.", dist, grav_mult)
+			local min_dist = 0 -- desired min. range gor Grav to take effect
+			local grav_effect_mult = 0	-- take 1/(300 - min_dist)
+			if (dist > 25 and dist <= 50) then
+				if wpn_type and wpn_type == "w_shotgun" then
+					min_dist = 25
+					grav_effect_mult = 0.0036
 				end
+			elseif (dist > 50 and dist <= 100) then
+				if wpn_type then
+					if wpn_type == "w_pistol" or string.find(wpn:section(), "vz61") or string.find(wpn:section(), "kiparis") then
+						min_dist = 50
+						grav_effect_mult = 0.004
+					end
+				end
+			elseif dist >= 100 then
+				min_dist = 100
+				grav_effect_mult = 0.005
 			end
-		elseif dist >= 100 then
-			grav_mult = (1 + clamp((dist - 99) * 0.00498, 0, 1)) or 1
-			k_ap = k_ap * grav_mult
-			printf("Grav in effect @ distance of %s meters for %sx mult.", dist, grav_mult)
+			
+			if min_dist ~= 0 and grav_effect_mult ~= 0 then
+				grav_mult = (1 + clamp((dist - min_dist) * grav_effect_mult, 0, 1)) or 1
+				grav_mult = round_idp(grav_mult, 3)
+				k_ap = k_ap * grav_mult
+				printf("Grav in effect @ distance of %s meters for %sx mult.", dist, grav_mult)
+			end
 		end
 		dist = 0
 	end
@@ -1553,12 +1567,22 @@ function npc_on_before_hit(npc, shit, bone_id)
 	end
 	
 	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) -- * 0.80
-	
+
+	-- ilrathCXV (07/28/24): - Fixed DR not being applied before final Resist Damage calculations
+	--						 - If DT is not broken, HP penalty is applied to increase the REMAINING DT after subtraction from AP power
+	local hp_penality_modifier = 1
 	local remaining_dmg_threshold = math.max(0, custom_bone_armor - k_ap)
+	if remaining_dmg_threshold > 0 then
+		hp_penality_modifier = (1/hp_no_penetration_penalty) or 1
+		remaining_dmg_threshold = remaining_dmg_threshold * hp_no_penetration_penalty
+	end
+		
+	-- ilrathCXV (07/29/24): Let's fix up the logic to *actually* match New Vegas (find DMG * DR, then do the threshold logic)
+	resist_damage = resist_damage * total_resist_modifier
 	
-	resist_damage = math.max((starter_damage * 0.2), ((resist_damage * total_resist_modifier) - remaining_dmg_threshold))
+	resist_damage = math.max((resist_damage * 0.2), (resist_damage  - remaining_dmg_threshold))
 	
-	printf('(2) Resist Damage: %s | Base DT: %s | AP Power: %s | Real DT: %s | Real DR: %s', resist_damage, custom_bone_armor, k_ap, remaining_dmg_threshold, total_resist_modifier)
+	printf('(2) Resist Damage: %s | Base DT: %s | AP Power: %s | Real DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
 	
 -- ///// (3) Final Base DMG calculations /////
 	local final_base_damage = resist_damage
@@ -1566,12 +1590,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- ilrathCXV (07/25/24): Armorbuster + Acid will affect whether or not the hit will suffer from the hp_penality_modifier
 	--						 Additionaly, if it pens thanks to either of these effects, they will add small amount of damage	 
 	local armorbuster_acid_effect_bonus = (armor_break_bonus * armor_break_mult) or 0
-	local hp_penality_modifier = 1
 	local new_remaining_threshold = (remaining_dmg_threshold - armorbuster_acid_effect_bonus)
 	
 	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
-		hp_penality_modifier = (1/hp_no_penetration_penalty) or 1
-		
 		-- base GAMMA no-pen feedback
 		pos = npc:bone_position(custom_bone_name)
 		fx = particles_object("hit_fx\\hit_metal_0" .. math.random(0,3))
@@ -1593,6 +1614,12 @@ function npc_on_before_hit(npc, shit, bone_id)
 		custom_bone_value[custom_bone_id] = 0
 		-- Ensures that the removal timer only occurs if active
 		if not custom_bone_broken_dt[custom_bone_id] then
+		
+			-- Add even more feedback on first-time/repeat DT breaks (was only for headshots in base GAMMA)
+			fx = particles_object("anomaly2\\effects\\body_tear_blood_01")
+			pos = npc:bone_position(custom_bone_name)
+			fx:play_at_pos(pos)
+			
 			custom_bone_broken_dt[custom_bone_id] = true
 			CreateTimeEvent("reset_dmg_threshold"..custom_bone_id..math.random(1,100), npc:id(), 5.0, reset_dmg_threshold, custom_bone_id, custom_bone_armor)
 		end
@@ -1604,9 +1631,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 	-- ilrathCXV (07/26/24): If there is not a full pen. hit, subtract the remaining DT from the current damage
 	--						 Headhunter/Basher headshots will skip this step
-	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
-		final_base_damage = math.max(0.0025, (final_base_damage - new_remaining_threshold))
-	end
+--	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
+--		final_base_damage = math.max(0.0025, (final_base_damage - new_remaining_threshold))
+--	end
 	
 	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
 	local difficulty_modifier = ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) or 1
@@ -1619,13 +1646,6 @@ function npc_on_before_hit(npc, shit, bone_id)
 	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_modifier
 	final_base_damage = math.max(final_base_damage, ((0.01 * flinch_mult)/pellet_count))
 	
-	-- Add even more feedback on headshots (base GAMMA)
-	if (new_remaining_threshold <= 0) and headBones[bone_id] then
-		fx = particles_object("anomaly2\\effects\\body_tear_blood_01")
-		pos = npc:bone_position(custom_bone_name)
-		fx:play_at_pos(pos)
-	end
-	
 	-- ilrathCXV (07/26/24): If the player has broken a part of the enemy's DT, this enables a larger floor for allowed damage when hitting body parts that haven't been broken
 	if npc_broken_dt[npc:id()] then
 		if npc_broken_dt[npc:id()] > 0 then
@@ -1636,10 +1656,11 @@ function npc_on_before_hit(npc, shit, bone_id)
 		end
 	end
 	
-	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_modifier, new_remaining_threshold)
-	
 	-- ilrathCXV (07/25/24): Now plug final damage into shit.damage
-	shit.power = final_base_damage
+	final_base_damage = round_idp(final_base_damage, 3)
+	shit.power = round_idp(final_base_damage, 3)		-- final_base_damage
+	
+	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_modifier, new_remaining_threshold)
 	
 	if is_actor then	-- ilrathCXV (04/11/2024): Will lock these out for NPCs always as they are the bigger culprits/will gain no effect from them
 		----------------
@@ -1754,7 +1775,7 @@ function momo_do_falloff(dist, sec, w_speed, a_speed, air_res, w_speed_base, sil
 	end
 	
 	local falloff	= clamp( (1 + (dist - eff_dis) * 0.05 * (air_res * 0.5 / (1.1 - air_res + 0.1))) , 1.0, 50.0)
-	printf("[True Falloff] Dist: %s | Eff. Dist: %s | Air Res: %s | Wep speed: %s | Bullet speed: %s | Falloff amt: %s | Falloff mod: %s", dist, eff_dis, air_res, w_speed, a_speed, falloff, round_idp((1 / falloff), 3))
+	-- printf("[True Falloff] Dist: %s | Eff. Dist: %s | Air Res: %s | Wep speed: %s | Bullet speed: %s | Falloff amt: %s | Falloff mod: %s", dist, eff_dis, air_res, w_speed, a_speed, falloff, round_idp((1 / falloff), 3))
 	
 	return round_idp((1 / falloff), 3)
 end
@@ -1870,7 +1891,7 @@ _G.CAI_Stalker__BeforeHitCallback = function(npc,shit,bone_id)
     if custom_hit then
         SendScriptCallback("npc_on_before_hit",npc,custom_hit.shit,custom_hit.bone_id, flags)
         if flags.ret_value then
-			printf("ArtiGrok BO - New hit power: %s", custom_hit.shit.power)
+			printf("ArtiGrok BO - True final hit power: %s", custom_hit.shit.power)
             if custom_hit.shit.type ~= hit.fire_wound then
                 shit.power = custom_hit.shit.power
             else
@@ -1896,7 +1917,7 @@ _G.CBaseMonster__BeforeHitCallback = function(monster,shit,bone_id)
     if custom_hit then
         SendScriptCallback("monster_on_before_hit",monster,custom_hit.shit,custom_hit.bone_id, flags)
         if flags.ret_value then
-			printf("ArtiGrok BO - New hit power: %s", custom_hit.shit.power)
+			printf("ArtiGrok BO - True final hit power: %s", custom_hit.shit.power)
             shit.power = custom_hit.shit.power
         end
     else
@@ -1931,7 +1952,7 @@ function actor_on_update()
 	
 	empty_table(bas_handler.weakened)
 	
-	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO v2.0.1 + NV //////////////////")
+	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO v2.0.3 + NV //////////////////")
 	
 end
 
