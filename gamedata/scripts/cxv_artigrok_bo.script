@@ -1563,7 +1563,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local total_resist_modifier = 1
 	if ignore_resistances == 0 then
 		total_resist_modifier = (sin_res * custom_bone_ap_scale) or 1
-		total_resist_modifier = math.max(total_resist_modifier, (1 - resist_limiter))	-- clamp(total_resist_modifier, (1 - resist_limiter), 3)
+		total_resist_modifier = math.max(total_resist_modifier, (1 - resist_limiter))
 	end
 	
 	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * ((is_actor and difficulty_multiplier[game_num]) or npc_difficulty_multiplier[game_num]) -- * 0.80

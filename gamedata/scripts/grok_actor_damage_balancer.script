@@ -463,60 +463,47 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 		-- Total protection
 		printf('H = %s | Body = %s | A = %s | Booster = %s', helmet_protection, armor_protection, artefacts_protection, booster_protection)
 		printf('Starter Damage: %s', shit.power)
-		base_power = shit.power
-		local min_power
 		total_resist_modifier = 1
+		local damage_threshold = 0
 		
-		-- ilrathCXV (07/25/24): Do base helmet math
+		-- ilrathCXV (07/29/24): Find all needed variables for calculations
 		if headshot == 1 then
-			--ilrathCXV (07/25/24): Take DR into effect first (multiplicative like New Vegas)
 			total_resist_modifier = (1 - (1 - helmet_protection) * (1 - artefacts_protection)) or total_resist_modifier
-			total_resist_modifier = math.max(total_resist_modifier, (1 - limiter)) -- clamp(total_resist_modifier, (1 - limiter), 3)
-			shit.power = shit.power * total_resist_modifier
-			min_power = shit.power * 0.2
-			printf('Helmet New Damage: %s', shit.power)
-			-- ilrathCXV (07/25/24): Now do DT (BR) value
-			-- 						 This will be the max amount of damage that will be blocked if the helmet has more BR than the AP of the round
-			local helmet_threshold_block = math.max(0, helmet_bone_value - k_ap)
-			if helmet_threshold_block > 0 then
-				no_pen = 1
-				-- ilrathCXV (07/25/24): Only reduce damage from DT if DR already reached the limiter value
-				if total_resist_modifier > (1 - limiter) then
-					shit.power = (shit.power * helmet_hit_frac) - helmet_threshold_block
-				end
-			end
-				
-			
-		else	
-		-- ilrathCXV (07/25/24): Do base armor math
-			-- ilrathCXV (07/25/24): Take DR into effect first
+			damage_threshold = helmet_bone_value or 0
+		else
 			total_resist_modifier = (1 - (1 - armor_protection) * (1 - artefacts_protection)) or total_resist_modifier
-			total_resist_modifier = math.max(total_resist_modifier, (1 - limiter))
-			shit.power = shit.power * total_resist_modifier
-			min_power = shit.power * 0.2
-			printf('Body New Damage: %s', shit.power)
-			-- ilrathCXV (07/25/24): Now do DT (BR) value
-			-- 						 This will be the max amount of damage that will be blocked if the armor has more BR than the AP of the round
-			local armor_threshold_block = math.max(0, armor_bone_value - k_ap)
-			if armor_threshold_block > 0 then
-				no_pen = 1
-				-- ilrathCXV (07/25/24): Only reduce damage from DT if DR already reached the limiter value
-				if total_resist_modifier > (1 - limiter) then
-					shit.power = (shit.power * armor_hit_frac) - armor_threshold_block
-				end
-			end
+			damage_threshold = armor_bone_value or 0
 		end
 		
-		-- ilrathCXV (07/25/24): Ensure resist damage is at least 20% of starter damage after affected by DR
-		if shit.power < min_power then
-			shit.power = min_power
-			printf('Damage changed to Min. Damage: %s', min_power)
+		total_resist_modifier = math.max(total_resist_modifier, (1 - limiter))
+		shit.power = shit.power * total_resist_modifier
+		local min_power = shit.power * 0.2
+		printf('New Damage via Resistance: %s', shit.power)
+		local hp_penalty_mult = 1
+		
+		-- ilrathCXV (07/29/24): Find if player's DT has been pen'd by the hit
+		-- 						 Check if resistance is equal to the limiter, and apply DT if not equal to it
+		--						 Ensure resist damage is at least 20% of damage after affected by DR
+		local remaining_threshold = math.max(0, damage_threshold - k_ap)
+				
+		if remaining_threshold > 0 then
+			no_pen = 1
+			-- ilrathCXV (07/25/24): Only reduce damage from DT if DR has not reached the limiter value (Resist DMG Mult. > Damage Limit's DMG mult.)
+			-- 						 Multiply the remaining DT by the HP penalty mult.
+			-- 						 Calculate the HP damage penalty since this is a no-pen. hit
+			if total_resist_modifier > (1 - limiter) then
+				remaining_threshold = remaining_threshold * hp_rounds
+				shit.power = shit.power - (remaining_threshold)
+			end
+			hp_penalty_mult = (1/hp_rounds) or 1
 		end
+		
+		-- ilrathCXV (07/29/24): Now before doing the final damage, ensure it's power is at least the minimum damage (20% of damage after applying resistances)
+		shit.power = math.max(min_power, shit.power)
 		
 		-- ilrathCXV (07/25/24): Do final damage math
 		-- 						 No pen. hits will get further reduced by HP penalty (AM)
-		if no_pen == 1 then
-			hp_penalty_mult = (1/hp_rounds) or 1
+		if no_pen == 1 and hp_penalty_mult ~= 1 then
 			shit.power = shit.power * hp_penalty_mult
 			printf('Damage after HP Penalty: %s', shit.power)
 		end
@@ -543,11 +530,11 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 		
 		shit.power = pbadamage.power
 		
-		
 		shit.power = round_idp(shit.power, 3)
 		
 		total_prot = 1 - total_resist_modifier
-		printf('[ADB - NV] New Base Damage to Player: %s | Total DR: %s%', shit.power, (1 - total_resist_modifier) * 100)
+		printf('[ADB - NV] Player DT: %s | Player DR: %s% | Enemy AP: %s | Remaining DT: %s | New Final Damage: %s', damage_threshold, round_idp(((1 - total_resist_modifier) * 100), 2), k_ap, remaining_threshold , shit.power)
+
 		
 	else
 		total_prot = (helmet_protection + armor_protection + artefacts_protection + booster_protection)
@@ -607,7 +594,7 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 	if shit.type == hit.fire_wound then
 		damage = shit.power
 	else
-		shit.power = shit.power * 0.8 -- weapons damage are a bit crazy, P90 has a power of 0.33 + crazy rate of fire...
+		-- shit.power = shit.power * 0.8 -- weapons damage are a bit crazy, P90 has a power of 0.33 + crazy rate of fire...
 
 		if shit.type == hit.telepatic then
 			game_num = gameplay["type"] or game_num
