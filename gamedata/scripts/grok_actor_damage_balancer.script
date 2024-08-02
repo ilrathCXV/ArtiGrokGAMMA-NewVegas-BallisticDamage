@@ -460,6 +460,9 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 	
 	if shit.type == hit.fire_wound then
 		
+		-- ilrathCXV (07/30/24): Reduce damage to match the reduction we do to Player damage/Stalker damage to Stalkers to better match New Vegas damage levels
+		shit.power = shit.power * 0.75
+		
 		-- Total protection
 		printf('H = %s | Body = %s | A = %s | Booster = %s', helmet_protection, armor_protection, artefacts_protection, booster_protection)
 		printf('Starter Damage: %s', shit.power)
@@ -922,8 +925,21 @@ function actor_on_climb_end()
 end
 
 -- ilrathCXV (07/27/24): Difficulty damage modifier option via ArtiGrok
-
-
+-- 						 MCM options to refresh on option change
+function on_option_change()
+	if ui_mcm and ballistics_mcm then
+	
+		difficulty_scaling 	= get_artigork_config("difficulty_scaling") or false
+		
+		difficulty_multiplier = {
+		[1]  = (difficulty_scaling and 0.65) or 1.0,
+		[2]  = (difficulty_scaling and 0.8) or 1.0,
+		[3]  = (difficulty_scaling and 1.0) or 1.0,
+		[4]  = (difficulty_scaling and 1.2) or 1.0,	
+	}
+		
+	end
+end
 
 function on_game_start()
 	RegisterScriptCallback("actor_on_before_hit",actor_on_before_hit)
@@ -932,4 +948,7 @@ function on_game_start()
 		RegisterScriptCallback("actor_on_climb_start",actor_on_climb_start)
 		RegisterScriptCallback("actor_on_climb_end",actor_on_climb_end)
 	end
+	-- ilrathCXV (04/01/2024): MCM options
+	RegisterScriptCallback("on_option_change",on_option_change)
+	on_option_change()
 end
