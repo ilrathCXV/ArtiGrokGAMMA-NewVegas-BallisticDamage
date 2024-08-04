@@ -204,9 +204,12 @@ bip01_r_foot	 	 		= 0.3,
 bip01_r_toe0	 	 		= 0.3,
 }
 
+-- ilrathCXV (08/03/24): Adding "negative" HP modifier (<1) for slugs/rounds that are supposed to act like 
+--						 DT-destroying rounds that ARE NOT armor-piercing rounds (shotgun slugs are exempt)
+
 hp_rounds = {
 	["ammo_357_hp_mag"] = 2,
-	["ammo_357_hp_mag_bad"] = 5,			-- Ratshot
+	["ammo_357_hp_mag_bad"] = 3,			-- Ratshot
 	["ammo_357_hp_mag_verybad"] = 2,
 	["ammo_9x18_pmm"] = 2,
 	["ammo_9x18_pmm_bad"] = 2,
@@ -226,44 +229,60 @@ hp_rounds = {
 	["ammo_5.56x45_ss190"] = 1.33,
 	["ammo_5.56x45_ss190_bad"] = 2.7,			-- Varmageddon: not effective agaisnt stalkers
 	["ammo_5.56x45_ss190_verybad"] = 1.33,
-	["ammo_12x76_zhekan"] = 3.5,
-	["ammo_12x76_zhekan_bad"] = 3.5,		-- Flechette (has Armorbuster)
+	
+	["ammo_12x76_zhekan"] = 0.8,
+	["ammo_12x76_zhekan_bad"] = 0.8,		-- Flechette (has Armorbuster)
+	
 	["ammo_12x76_zhekan_verybad"] = 3.5,
-	["ammo_12x76_dart"] = 1.5,
-	["ammo_12x76_dart_bad"] = 1.5, 			-- Dragon's Breath
+	
+	["ammo_12x76_dart"] = 0.77,
+	
+	-- ["ammo_12x76_dart_bad"] = 1.5, 			-- Dragon's Breath
 	["ammo_12x76_dart_verybad"] = 1.5,
 	["ammo_12x70_buck"] = 3,
-	["ammo_12x70_buck_bad"] = 3,
+	
+	["ammo_12x70_buck_bad"] = 0.91,
+	
 	["ammo_12x70_buck_verybad"] = 3,
 	["ammo_23x75_shrapnel"] = 2,
 	["ammo_23x75_shrapnel_bad"] = 2,
-	["ammo_23x75_barrikada"] = 3.5,
+	
+	["ammo_23x75_barrikada"] = 0.5,
+	
 	["ammo_20x70_buck"] = 2,
 
 -- ArtiGrok/modded additions
 	
 	["ammo_10x25_hydrashok"] = 2.5,
 	["ammo_10x25_hydrashok_bad"] = 2.5,
-	["ammo_10x25_fmj_bad"] = 4,				-- Armorbuster: do less damage on non-pen hits
+	["ammo_10x25_fmj_bad"] = 0.91,				-- Armorbuster: do less damage on non-pen hits
 	["ammo_5.7x28_ss195"] = 1.5,
 	["ammo_300blackout_fjm_bad"] = 1.33,
 	["ammo_44_mag"] = 2,
 	["ammo_20x70_buck_bad"] = 3,			-- #3BK
-	["ammo_20x70_devastator"] = 2.5,		-- standard slug
+	
+	["ammo_20x70_devastator"] = 0.77,		-- standard slug
+	
 	["ammo_20x70_devastator_bad"] = 50, 	-- glass slug
-	["ammo_20x70_star"] = 1.33,				-- AP Dart
+	
+	["ammo_20x70_star"] = 0.61,				-- AP Dart
 	-- ["ammo_20x70_star_bad"] = 1.33,		-- Lightning Slug
+	
 	["ammo_23x75_shrapnel_bad"] = 2,		-- Chaos Buckshot
 	-- ["ammo_23x75_barrikada_bad"] = 3.5,	-- Napalm Slug
 	["ammo_23_eco"] = 5,					-- Cloudkill Syringe
 	["ammo_9x21_sp12"] = 1.5,				-- "Shrimp" HP Ammo 
 	["ammo_9x21_sp12_bad"] = 1.5,			-- "Shrimp" Zonemade HP
-	["ammo_11.43x23_fmj_bad"] = 1.5,		-- "FMJ+" .45 ACP (to offset not penetrating armor - that is .45 Behemoth's job)
-	["ammo_pkm_100_bad"] = 1.11,			-- PKM Tri-shot
-	["ammo_5.56x45_ap_bad"] = 1.11,			-- Quad-shot (meant to shred armor, less for pure damage)
+	
+	["ammo_11.43x23_fmj_bad"] = 1.0989,		-- "FMJ+" .45 ACP (to offset not penetrating armor - that is .45 Behemoth's job)
+	-- ["ammo_pkm_100_bad"] = 1.11,			-- PKM Tri-shot
+	-- ["ammo_5.56x45_ap_bad"] = 1.11,			-- Quad-shot (meant to shred armor, less for pure damage)
+	
 	["ammo_7.62x54_7h1_bad"] = 5,			-- Headhunter (should do little damage if not hitting a headshot)
 	["ammo_7.92x33_fmj_bad"] = 2.7,			-- Varmageddon: not effective agaisnt stalkers 
-	["ammo_7.62x25_ps_bad"] = 2,			-- 7.62x25 Acid Rounds (eats armor, doesn't do much impact damage)
+	
+	["ammo_7.62x25_ps_bad"] = 0.5,			-- 7.62x25 Acid Rounds (eats armor, doesn't do much impact damage)
+
 	["ammo_5.7x28_ss195_bad"] = 2.5,		-- 5.7 Fragmenting Round
 
 }

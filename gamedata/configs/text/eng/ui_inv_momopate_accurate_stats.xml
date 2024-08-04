@@ -18,7 +18,11 @@
 	<string id="st_mp_a_impair">		<text>Degradation mod.</text>		</string>
 	<string id="st_mp_a_impulse">		<text>Impulse mod.</text>			</string>
 	<string id="st_mp_a_bsize">			<text>Bullet size</text>			</string>
-	<string id="st_mp_a_nopen">			<text>Concussion penalty</text>		</string>
+	<string id="st_mp_a_nopen">			<text>D-Threshold mod.</text>		</string>
+	
+	<string id="st_mp_a_nopen">			<text>D-Threshold mod.</text>		</string>
+	<string id="st_prop_nopen">			<text>D-Threshold mod.</text>		</string>
+	
 	<string id="st_mp_a_recoil">		<text>Recoil mod.</text>			</string>
 	<string id="st_mp_mm">				<text>mm</text>						</string>
 	<string id="st_mp_ap">				<text>DT</text>						</string>
