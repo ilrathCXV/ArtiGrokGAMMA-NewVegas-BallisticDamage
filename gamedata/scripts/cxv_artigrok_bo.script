@@ -392,7 +392,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	bone_mult			= 1
 	is_critical			= false
 	
-	printf("///////////   Mutant Hit registered: ArtiGrok BO v2.0.3 + NV   //////////////////")
+	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.0.5 + NV   //////////////////")
 	printf('%s about to be hit by %s in bone %s', monster and monster:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 
 	if (string.match(sec, "knife")) then
@@ -503,10 +503,6 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	if string.find(monster:name(), "chimera") then
 		spec_monster_mult = 0.75
 		
-		if ammo_section == "ammo_23_eco" then
-			ammo_mult = 3.3
-		end
-		
 		if (bone_id == 33 or bone_id == 24 or bone_id == 25 or bone_id == 23 or bone_id == 28) then
 			bone_mult = 2.00
 			printf("Critical Hit!")
@@ -516,10 +512,6 @@ function mutant_on_before_hit(monster, shit, bone_id)
 
 	if string.find(monster:name(), "boar") then
 		spec_monster_mult = 0.95
-		
-		if ammo_section == "ammo_23_eco" then	-- to avoid insta-kills
-			spec_monster_mult = 0.85
-		end
 		
 		if bone_id == 15 or bone_id == 33 then	-- back legs/thighs
 			bone_mult = 1.20
@@ -604,20 +596,6 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		end
 	end
 	
-	-- ilrathCXV: Extra to avoid Eco from instakilling the below mutants
-	
-	if string.find(monster:name(), "controller") then
-		if ammo_section == "ammo_23_eco" then
-			spec_monster_mult = 0.85
-		end
-	end
-	
-	if string.find(monster:name(), "biblotekar") then
-		if ammo_section == "ammo_23_eco" then
-			spec_monster_mult = 0.85
-		end
-	end
-	
 	-- ilrathCXV (04/01/2024): try to save on performance whereever possible (if no scaling, doesn't matter which index is used)
 	local game_num = 1
 	
@@ -675,11 +653,16 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		bas_handler.corrosive_cloud(monster, bone_id)
 	end
 	
-	-- KS-23 Eco + 23x75 Cloudkill will OHK smaller targets instead of modifying the damage
-	if ammo_section == "ammo_23_eco" and spec_monster_mult > 0.86 then
-		monster:kill(db.actor)
-		printf("23mm Eco Intercept: %s dead ", monster and monster:name())
-		return
+	-- KS-23 Eco + 23x75 Cloudkill will OHK all mutants (take its remaining health and add it to the hit power)
+	if ammo_section == "ammo_23_eco" then
+		shit.power = shit.power + monster.health
+		monster:set_health_ex(0.0001)
+		-- monster:kill(db.actor)
+		-- printf("23mm Eco Intercept: %s dead ", monster and monster:name())
+		return {
+			["shit"] = shit,
+			["bone_id"] = bone_id
+		}
 	end
 	
 	-----------------
@@ -942,7 +925,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 -- ////// Now, all of the GAMMA GBO + ArtiGrok stuff //////
 	
-	printf("///////////   Stalker Hit registered: ArtiGrok BO v2.0.3 + NV  //////////////////")
+	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.0.5 + NV  //////////////////")
 	printf('%s about to be hit by %s in bone %s', npc and npc:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 	
 --////////////// DATA PARSING OF HELL - A BONES AND BOOLETS TALE //////////////
@@ -966,7 +949,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if sec and integrated_silencer[sec] then
 			silencer_boost = 1.03
 		elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
-			if wpn and wpn:weapon_is_silencer() then
+			if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
 				silencer_boost = 1.03
 			end
 		end
@@ -974,7 +957,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if sec and integrated_silencer[sec] then
 			silencer_boost = 1.07
 		elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
-			if wpn and wpn:weapon_is_silencer() then
+			if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
 				silencer_boost = 1.07
 			end
 		end
@@ -1290,7 +1273,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if pellet_count > 1 then
 			k_ap = ( k_ap + round_idp((0.18 / pellet_count), 3) )	-- 0.02 -- 0.013
 		else
-			k_ap = ( k_ap + (0.013 * leg_meta_sniper_null) )	-- 0.075
+			k_ap = ( k_ap + (0.03 * leg_meta_sniper_null) )	-- 0.13 -- 0.075
 		end
 	end
 
@@ -1298,12 +1281,10 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if pellet_count > 1 then
 			k_ap = ( k_ap + round_idp((0.171 / pellet_count), 3) )	-- 0.019
 		else
-			k_ap = ( k_ap + 0.040 )
+			k_ap = ( k_ap + 0.060 ) -- 0.040
 		end
 	end
 	
-	k_ap = k_ap * barrel_condition_corrected -- reduce bullet ap following barrel condition (custom_bone_ap_scale no longer reduces k_ap)
-
 	------------------
 	-- Chaos Rounds --
 	------------------
@@ -1971,7 +1952,7 @@ function actor_on_update()
 	
 	empty_table(bas_handler.weakened)
 	
-	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO v2.0.3 + NV //////////////////")
+	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.0.5 + NV //////////////////")
 	
 end
 
