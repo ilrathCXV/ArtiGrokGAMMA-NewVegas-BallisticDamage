@@ -428,8 +428,6 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 			if booster_type_def == 6 then
 				booster_protection  = booster_value * arti_adjuster * adjuster
 			end
-			
-			
 		end
 	end)
 
@@ -476,12 +474,13 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 		else
 			total_resist_modifier = (1 - (1 - armor_protection) * (1 - artefacts_protection)) or total_resist_modifier
 			damage_threshold = armor_bone_value or 0
+			damage_threshold = damage_threshold + artefacts_ap_res
 		end
 		
-		total_resist_modifier = math.max(total_resist_modifier, (1 - limiter))
-		shit.power = shit.power * total_resist_modifier
+		total_resist_modifier = math.max(total_resist_modifier, limiter)
+		shit.power = shit.power * (1 - total_resist_modifier)
 		local min_power = shit.power * 0.2
-		printf('New Damage via Resistance: %s', shit.power)
+		printf('New Damage via Resistance: %s | DR Mod. : %s', shit.power, total_resist_modifier)
 		local hp_penalty_mult = 1
 		
 		-- ilrathCXV (07/29/24): Find if player's DT has been pen'd by the hit
@@ -494,7 +493,7 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 			-- ilrathCXV (07/25/24): Only reduce damage from DT if DR has not reached the limiter value (Resist DMG Mult. > Damage Limit's DMG mult.)
 			-- 						 Multiply the remaining DT by the HP penalty mult.
 			-- 						 Calculate the HP damage penalty since this is a no-pen. hit
-			if total_resist_modifier > (1 - limiter) then
+			if total_resist_modifier < limiter then
 				remaining_threshold = remaining_threshold * hp_rounds
 				shit.power = shit.power - (remaining_threshold)
 			end
@@ -535,8 +534,8 @@ function get_protection(shit,bone_id,k_ap, hp_rounds)
 		
 		shit.power = round_idp(shit.power, 3)
 		
-		total_prot = 1 - total_resist_modifier
-		printf('[ADB - NV] Player DT: %s | Player DR: %s% | Enemy AP: %s | Remaining DT: %s | New Final Damage: %s', damage_threshold, round_idp(((1 - total_resist_modifier) * 100), 2), k_ap, remaining_threshold , shit.power)
+		total_prot = total_resist_modifier
+		printf('[ADB - NV] Player DT: %s | Player DR: %s% | Enemy AP: %s | Remaining DT: %s | New Final Damage: %s', damage_threshold, round_idp((total_resist_modifier * 100), 2), k_ap, remaining_threshold , shit.power)
 
 		
 	else
@@ -655,7 +654,7 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 	db.actor:set_health_ex(db.actor.health - damage)
 	
 	if no_pen == 0 then
-		if shit.type == hit.wound or shit.type == hit.fire_wound then
+		if shit.type == hit.fire_wound or shit.type == hit.wound then
 			db.actor:cast_Actor():conditions():AddWound(damage, hit_type, bone_id)
 		end
 	end
@@ -857,7 +856,9 @@ function actor_on_before_hit(shit,bone_id, flags)
 			end	
 
 			k_ap = ini_sys:r_float_ex(ammo_section, "k_ap") * 10 or 0
-
+			
+			printf('actor about to get hit by %s from %s', ammo_section, sec)
+			
 			shit_booster(shit,bone_id, k_ap, hp_rounds)
 		end
 
