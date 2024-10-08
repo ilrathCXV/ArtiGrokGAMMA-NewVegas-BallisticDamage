@@ -34,15 +34,16 @@ local vanilla_diff = {
 -- Damage reduction based on difficulty
 -- ilrathCXV (07/25/24): Values are set to 1 as defaults
 -- ilrathCXV (07/25/24): Now uses the settings from MCM
+-- ilrathCXV (10/07/24): Renamed to work with new MCM settings (AP power not used as it would shred the player constantly)
 
 get_artigork_config 		 	= ballistics_mcm.get_config
-difficulty_scaling 				= get_artigork_config("difficulty_scaling") or false
+difficulty_scaling_damage 		= get_artigork_config("difficulty_scaling_damage") or false
 
-local difficulty_multiplier = {
-	[1]  = (difficulty_scaling and 0.65) or 1.0,
-	[2]  = (difficulty_scaling and 0.8) or 1.0,
-	[3]  = (difficulty_scaling and 1.0) or 1.0,
-	[4]  = (difficulty_scaling and 1.2) or 1.0,	
+local difficulty_multiplier_damage = {
+	[1]  = (difficulty_scaling_damage and 0.65) or 1.0,
+	[2]  = (difficulty_scaling_damage and 0.8) or 1.0,
+	[3]  = (difficulty_scaling_damage and 1.0) or 1.0,
+	[4]  = (difficulty_scaling_damage and 1.2) or 1.0,	
 }
 
 -- Lists of engine pointers
@@ -600,7 +601,7 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 
 		if shit.type == hit.telepatic then
 			game_num = gameplay["type"] or game_num
-			damage = shit.power * ( 1 - total_prot ) * difficulty_multiplier[game_num] * 0.90
+			damage = shit.power * ( 1 - total_prot ) * difficulty_multiplier_damage[game_num] * 0.90
 			local m_data = alife_storage_manager.get_state() 
 			arszi_psy.save_state(m_data)
 			local psy_table = m_data.psy_table
@@ -777,7 +778,7 @@ function actor_on_before_hit(shit,bone_id, flags)
 
 		if (rad_trigger == 1 and tg > rad_grace_delay and tg < rad_grace_cancel) then
 			game_num = gameplay["type"] or game_num
-			shit.power = shit.power * difficulty_multiplier[game_num]
+			shit.power = shit.power * difficulty_multiplier_damage[game_num]
 			return
 		else
 			shit.power = 0
@@ -831,7 +832,7 @@ function actor_on_before_hit(shit,bone_id, flags)
 		game_num = gameplay["type"] or game_num
 
 			--printf(game_num)
-		shit.power = shit.power * difficulty_multiplier[game_num]
+		shit.power = shit.power * difficulty_multiplier_damage[game_num]
 
 	-- Reduce shotguns damage and get ammo AP power
 		if (shit.type == hit.fire_wound) then
@@ -930,13 +931,13 @@ end
 function on_option_change()
 	if ui_mcm and ballistics_mcm then
 	
-		difficulty_scaling 	= get_artigork_config("difficulty_scaling") or false
+		difficulty_scaling_damage 	= get_artigork_config("difficulty_scaling_damage") or false
 		
-		difficulty_multiplier = {
-		[1]  = (difficulty_scaling and 0.65) or 1.0,
-		[2]  = (difficulty_scaling and 0.8) or 1.0,
-		[3]  = (difficulty_scaling and 1.0) or 1.0,
-		[4]  = (difficulty_scaling and 1.2) or 1.0,	
+		difficulty_multiplier_damage = {
+		[1]  = (difficulty_scaling_damage and 0.65) or 1.0,
+		[2]  = (difficulty_scaling_damage and 0.8) or 1.0,
+		[3]  = (difficulty_scaling_damage and 1.0) or 1.0,
+		[4]  = (difficulty_scaling_damage and 1.2) or 1.0,	
 	}
 		
 	end
