@@ -333,7 +333,10 @@ function validate_hit(shit, bone_id, npc_id)
 	sec = wpn:section()
 	
 	-- ilrathCXV (10/07/24): Crash catch that can occur from story script events
-	if sec == "actor" then return end
+	if sec == "actor" or sec == "explosive_barrel" or sec == "explosive_barrel_low" or sec == "explosive_tank" or sec == "explosive_grenade" or sec == "explosive_hide" or sec == "explosive_particle" or sec == "explosive_fuelcan" 
+	or sec == "explosive_mobiltank" or sec == "explosive_dinamit" then
+		return
+	end
 
 	if ini_sys:r_string_ex(sec, "class") == "S_EXPLO" then return end
 	if IsItem("fake_ammo_wpn",sec) then return end
@@ -619,7 +622,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	-- ilrathCXV (04/01/2024): try to save on performance whereever possible (if no scaling, doesn't matter which index is used)
 	local game_num = 1
 	
-	if difficulty_scaling then
+	if difficulty_multiplier_damage then
 		local gameplay = alife_storage_manager.get_state().diff_game
 		if not (type(gameplay) == "table") then -- for old saves
 			alife_storage_manager.get_state().diff_game = {}
@@ -831,6 +834,8 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		dist = 0
 	end
 	
+	local difficulty_dmg_mod = ((is_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
+	
 	-- ilrathCXV (04/01/2024): True falloff calcs (credit to etapomom)
 	if true_falloff then
 		local weapon_speed 		= utils_item.get_param(sec, wpn and wpn:id(), "bullet_speed", "float", true)
@@ -838,7 +843,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		local weapon_base_speed = SYS_GetParam(2, sec, "bullet_speed", 1)
 		local falloff_modifier 	= momo_do_falloff(dist, sec, weapon_speed, ammo_speed, air_res, weapon_base_speed, silencer_boost)
 		
-		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * ((is_actor and difficulty_multiplier_damage[game_num]) or npc_difficulty_multiplier_damage[game_num])
+		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * difficulty_dmg_mod
 	else
 		shit.power = shit.power / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 ))) * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * ((is_actor and difficulty_multiplier_damage[game_num]) or npc_difficulty_multiplier_damage[game_num])
 	end
@@ -1236,6 +1241,13 @@ function npc_on_before_hit(npc, shit, bone_id)
 			fx:set_direction(fxdir)
 			fx:play_at_pos(pos)			
 		end
+
+--	/////// CHECK IF NPC IS FROM THE ZOMBIED FACTION TO REDUCE DAMAGES //////
+
+		if faction == "zombied" then
+			sin_res = 0.3
+			isg_res = 1
+		end
 		
 --	/////// CHECK IF NPC IS FROM THE ISG FACTION TO REDUCE PENETRATION AND DAMAGE //////
 
@@ -1255,7 +1267,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 			pos.z = pos.z + (camdir.z * -0.0005)
 			fx:play_at_pos(pos)
 		end
-		
+	
 		if faction == "monolith" then
 			isg_res = 0.90
 			sin_res = 0.80
@@ -1270,7 +1282,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- ilrathCXV (04/01/2024): try to save on performance whereever possible (if no scaling, doesn't matter which index is used)
 	local game_num = 1
 	
-	if difficulty_scaling then
+	if difficulty_scaling_ap or difficulty_multiplier_damage then
 		local gameplay = alife_storage_manager.get_state().diff_game
 		if not (type(gameplay) == "table") then -- for old saves
 			alife_storage_manager.get_state().diff_game = {}
@@ -1587,7 +1599,8 @@ function npc_on_before_hit(npc, shit, bone_id)
 		total_resist_modifier = math.max(total_resist_modifier, (1 - resist_limiter))
 	end
 	
-	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * ((is_actor and difficulty_multiplier_ap[game_num]) or npc_difficulty_multiplier_ap[game_num]) -- * 0.80
+	local difficulty_ap_mod = ((is_actor and (difficulty_scaling_ap and difficulty_multiplier_ap[game_num] or 1)) or (difficulty_scaling_ap and npc_difficulty_multiplier_ap[game_num] or 1)) or 1	
+	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * difficulty_ap_mod -- * 0.80
 
 	-- ilrathCXV (07/28/24): - Fixed DR not being applied before final Resist Damage calculations
 	--						 - If DT is not broken, HP penalty is applied to increase the REMAINING DT after subtraction from AP power
@@ -1603,7 +1616,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 	resist_damage = math.max((resist_damage * 0.2), (resist_damage  - remaining_dmg_threshold))
 	
-	printf('(2) Resist Damage: %s | Base DT: %s | AP Power: %s | Real DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
+	printf('(2) Resist Damage: %s | Base DT: %s | Difficulty AP Mod: %s | AP Power: %s | Real DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, difficulty_ap_mod, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
 	
 -- ///// (3) Final Base DMG calculations /////
 	local final_base_damage = resist_damage
@@ -1657,7 +1670,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 --	end
 	
 	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
-	local difficulty_modifier = ((is_actor and difficulty_multiplier_damage[game_num]) or npc_difficulty_multiplier_damage[game_num]) or 1
+	local difficulty_dmg_mod = ((is_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
 	
 	-- ilrathCXV (10/06/24): Reduce locational modifer by 70% or x0.3 for companions
 	local total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce * (((npc:has_info("npcx_is_companion")) and 0.3) or 1.0)
@@ -1665,7 +1678,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		total_locational_modifier = math.min(total_locational_modifier, 2.0)
 	end
 	
-	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_modifier
+	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_dmg_mod
 	final_base_damage = math.max(final_base_damage, ((0.01 * flinch_mult)/pellet_count))
 	
 	-- ilrathCXV (07/26/24): If the player has broken a part of the enemy's DT, this enables a larger floor for allowed damage when hitting body parts that haven't been broken
@@ -1682,7 +1695,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	final_base_damage = round_idp(final_base_damage, 3)
 	shit.power = round_idp(final_base_damage, 3)		-- final_base_damage
 	
-	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_modifier, new_remaining_threshold)
+	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_dmg_mod, new_remaining_threshold)
 	
 	if is_actor then	-- ilrathCXV (04/11/2024): Will lock these out for NPCs always as they are the bigger culprits/will gain no effect from them
 		----------------
