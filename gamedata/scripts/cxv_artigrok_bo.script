@@ -339,7 +339,7 @@ function validate_hit(shit, bone_id, npc_id)
 	end
 
 	if ini_sys:r_string_ex(sec, "class") == "S_EXPLO" then return end
-	if IsItem("fake_ammo_wpn",sec) then return end
+	if IsItem("fake_ammo_wpn",sec) and not IsMelee(wpn) then return end
 	
 	return {
 		["wpn"] = wpn,
@@ -432,11 +432,6 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local ammo_type_number = wpn:get_ammo_type()
 	local ammo_list = utils_item.get_ammo(sec, wpn_id)
 	local ammo_section = ammo_list[ammo_type_number+1]
-	local wpn_hit_power = ui_wpn_params.read_float(sec, "", "hit_power")
-
-	if string.find(sec, "wpn_toz106") then
-		wpn_hit_power = 0.8
-	end
 	
 	if not ammo_section then
 		return
@@ -451,13 +446,14 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local dist = (monster_pos:distance_to(shooter_pos))
 	
 	local silencer_boost = 1
-	
-	if true_falloff then
-		if sec and integrated_silencer[sec] then
-			silencer_boost = 1.03
-		elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
-			if wpn and wpn:weapon_is_silencer() then
+	if not IsMelee(wpn) then
+		if true_falloff then
+			if sec and integrated_silencer[sec] then
 				silencer_boost = 1.03
+			elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
+				if wpn and wpn:weapon_is_silencer() then
+					silencer_boost = 1.03
+				end
 			end
 		end
 	end
@@ -622,7 +618,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	-- ilrathCXV (04/01/2024): try to save on performance whereever possible (if no scaling, doesn't matter which index is used)
 	local game_num = 1
 	
-	if difficulty_multiplier_damage then
+	if difficulty_scaling_damage then
 		local gameplay = alife_storage_manager.get_state().diff_game
 		if not (type(gameplay) == "table") then -- for old saves
 			alife_storage_manager.get_state().diff_game = {}
@@ -837,7 +833,9 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local difficulty_dmg_mod = ((is_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
 	
 	-- ilrathCXV (04/01/2024): True falloff calcs (credit to etapomom)
-	if true_falloff then
+	if IsMelee(wpn) then
+		falloff_modifier = 1
+	elseif true_falloff then
 		local weapon_speed 		= utils_item.get_param(sec, wpn and wpn:id(), "bullet_speed", "float", true)
 		local ammo_speed   		= ini_sys:r_float_ex(ammo_section, "k_bullet_speed") or 1
 		local weapon_base_speed = SYS_GetParam(2, sec, "bullet_speed", 1)
@@ -845,7 +843,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		
 		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * difficulty_dmg_mod
 	else
-		shit.power = shit.power / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 ))) * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * ((is_actor and difficulty_multiplier_damage[game_num]) or npc_difficulty_multiplier_damage[game_num])
+		shit.power = shit.power / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 ))) * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * difficulty_dmg_mod
 	end
 	printf("Barrel condition: %s, ArtiGrok BO output damage: %s, Ammo multiplier: %s, CQC multiplier: %s", barrel_condition, shit.power, ammo_mult, snake_mult)
 	
@@ -962,7 +960,15 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local ammo_list = utils_item.get_ammo(sec, wpn_id)
 	local ammo_section = ammo_list[ammo_type_number+1]
 	local wpn_hit_power = ui_wpn_params.read_float(sec, "", "hit_power")
+	local melee_hit_power = IsMelee(wpn) and shit.power or nil
 	local wpn_kind = nil
+	
+	if melee_hit_power then
+		printf("Stat Melee Hit Power (%s) vs Actual Melee Hit Power(%s)", wpn_hit_power, melee_hit_power)
+		if melee_hit_power > wpn_hit_power then
+			wpn_hit_power = melee_hit_power
+		end
+	end
 	
 	if is_actor then
 		printf("Section is: %s", sec)
@@ -971,20 +977,22 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 	local silencer_boost = 1
 	
-	if true_falloff then
-		if sec and integrated_silencer[sec] then
-			silencer_boost = 1.03
-		elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
-			if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
+	if not IsMelee(wpn) then
+		if true_falloff then
+			if sec and integrated_silencer[sec] then
 				silencer_boost = 1.03
+			elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
+				if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
+					silencer_boost = 1.03
+				end
 			end
-		end
-	else
-		if sec and integrated_silencer[sec] then
-			silencer_boost = 1.07
-		elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
-			if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
+		else
+			if sec and integrated_silencer[sec] then
 				silencer_boost = 1.07
+			elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
+				if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
+					silencer_boost = 1.07
+				end
 			end
 		end
 	end
@@ -1304,9 +1312,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- ilrathCXV (07/26/24): Shotgun AP bonuses now appropriately and proportionally given to multi-pellet/multi-projectile ammo
 	if tonumber(bone_ap_boost) >= 3 and tonumber(bone_id) <= 9 then -- leg meta, bullets ap boost in legs
 		if pellet_count > 1 then
-			k_ap = ( k_ap + round_idp((0.18 / pellet_count), 3) )	-- 0.02 -- 0.013
+			k_ap = ( k_ap + round_idp((0.117 / pellet_count), 3) ) -- buck still receives 0.013 like normal
 		else
-			k_ap = ( k_ap + (0.03 * leg_meta_sniper_null) )	-- 0.13 -- 0.075
+			k_ap = ( k_ap + (0.075 * leg_meta_sniper_null) )
 		end
 	end
 
@@ -1558,7 +1566,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 -- ///// (1) Starter DMG calculations /////
 	local starter_damage = 0
 	local falloff_modifier = 0
-	if true_falloff then
+	if IsMelee(wpn) then
+		falloff_modifier = 1
+	elseif true_falloff then
 		local weapon_speed 		= utils_item.get_param(sec, wpn and wpn:id(), "bullet_speed", "float", true)
 		local ammo_speed   		= ini_sys:r_float_ex(ammo_section, "k_bullet_speed") or 1
 		local weapon_base_speed = SYS_GetParam(2, sec, "bullet_speed", 1)
