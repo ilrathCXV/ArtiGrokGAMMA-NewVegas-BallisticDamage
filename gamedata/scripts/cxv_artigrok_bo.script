@@ -5,6 +5,7 @@
 -- ilrathCXV (07/25/24): Experimenting with adding DT/DR a la New Vegas
 -- ilrathCXV (10/06/24): More tweaks for better companion survivablilty (mainly meant for story NPCs)
 -- ilrathCXV (10/07/24): More difficulty option tweaks
+-- ilrathCXV (12/06/24): GAMMA 0.9.3 additions
 ----------------------------------------------------------------------------------------------------------------------
 
 custom_bone_value	= {} -- this a table with each identifier being npcid_boneid, these returns custom bonearmor value. It is filled, alongside the other custom tables, after every new bone hit
@@ -72,6 +73,26 @@ integrated_silencer = {
 	["wpn_700black"] = true,
 }
 
+snipers = {
+	["wpn_dvl10_m1"] = true,
+	["wpn_dvl10"] = true,
+	["wpn_l96a1"] = true,
+	["wpn_l96a1m"] = true,
+	["wpn_m98b"] = true,
+	["wpn_m24"] = true,
+	["wpn_remington700"] = true,
+	["wpn_remington700_archangel"] = true,
+	["wpn_remington700_lapua700"] = true,
+	["wpn_remington700_magpul_pro"] = true,
+	["wpn_remington700_mod_x_gen3"] = true,
+	["wpn_remington700_steyr_scout_big"] = true,
+	["wpn_sv98"] = true,
+	["wpn_sv98_custom"] = true,
+	["wpn_k98_mod"] = true,
+	["wpn_wa2000"] = true,
+	["wpn_trg"] = true,
+	["wpn_mosin"] = true,
+}
 -- ilrathCXV (10/07/24): Players will now be able to decide if they want to enable/disable difficulty scaling for damage and/or AP power
 local difficulty_multiplier_damage = {
 	[1]  = (difficulty_scaling_damage and 1.3) or 1.0,
@@ -415,7 +436,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	bone_mult			= 1
 	is_critical			= false
 	
-	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.0.6 + NV   //////////////////")
+	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.0.7 + NV   //////////////////")
 	printf('%s about to be hit by %s in bone %s', monster and monster:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 
 	if (string.match(sec, "knife")) then
@@ -434,7 +455,10 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local ammo_section = ammo_list[ammo_type_number+1]
 	
 	if not ammo_section then
-		return
+		return {
+            ["shit"] = shit,
+            ["bone_id"] = bone_id
+        }
 	end
 	
 	-- /// save ammo data ///
@@ -833,20 +857,22 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local difficulty_dmg_mod = ((is_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
 	
 	-- ilrathCXV (04/01/2024): True falloff calcs (credit to etapomom)
+	local falloff_modifier = 1
 	if IsMelee(wpn) then
 		falloff_modifier = 1
 	elseif true_falloff then
 		local weapon_speed 		= utils_item.get_param(sec, wpn and wpn:id(), "bullet_speed", "float", true)
 		local ammo_speed   		= ini_sys:r_float_ex(ammo_section, "k_bullet_speed") or 1
 		local weapon_base_speed = SYS_GetParam(2, sec, "bullet_speed", 1)
-		local falloff_modifier 	= momo_do_falloff(dist, sec, weapon_speed, ammo_speed, air_res, weapon_base_speed, silencer_boost)
+		falloff_modifier 	= (1.0 / momo_do_falloff(dist, sec, weapon_speed, ammo_speed, air_res, weapon_base_speed, silencer_boost))
 		
 		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * difficulty_dmg_mod
 	else
-		shit.power = shit.power / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 ))) * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * difficulty_dmg_mod
+		falloff_modifier = (1.0 / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 ))))
+		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * difficulty_dmg_mod * snake_mult * barrel_condition_corrected
 	end
 	printf("Barrel condition: %s, ArtiGrok BO output damage: %s, Ammo multiplier: %s, CQC multiplier: %s", barrel_condition, shit.power, ammo_mult, snake_mult)
-	
+	printf("Mutant mult: %s, Spec Monster Mult: %s, Difficulty Damage Modifier: %s, Falloff Modifier: %s", mutant_mult, spec_monster_mult, difficulty_dmg_mod, falloff_modifier)
 	if is_actor then	-- ilrathCXV (04/11/2024): Will lock these off from NPCs always as these might be the bigger culprits/has no effect on them
 		------------------------
 		-- [NEW] Graze Rounds --
@@ -948,7 +974,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 -- ////// Now, all of the GAMMA GBO + ArtiGrok stuff //////
 	
-	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.0.6 + NV  //////////////////")
+	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.0.7 + NV  //////////////////")
 	printf('%s about to be hit by %s in bone %s', npc and npc:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 	
 --////////////// DATA PARSING OF HELL - A BONES AND BOOLETS TALE //////////////
@@ -1326,6 +1352,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 		end
 	end
 	
+	if snipers[wpn:section()] then
+		k_ap = k_ap + 0.05
+	end
 	------------------
 	-- Chaos Rounds --
 	------------------
@@ -2013,7 +2042,7 @@ function actor_on_update()
 	
 	empty_table(bas_handler.weakened)
 	
-	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.0.6 + NV //////////////////")
+	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.0.7 + NV //////////////////")
 	
 end
 
