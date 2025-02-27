@@ -64,5 +64,7 @@
 	<string id="st_mp_stat_strike">		<text>IMPACT</text>					</string>
 	<string id="st_mp_stat_explosion">	<text>EXPLOSIVE</text>				</string>
 	<string id="st_mp_stat_power">		<text>STAMINA REGEN.</text>			</string>
-
+	<string id="st_mp_stat_health">		<text>HEALTH REGEN.</text>			</string>
+	<string id="st_mp_stat_bleed">		<text>BLEED CONTROL</text>			</string>
+	<string id="st_mp_stat_cap">		<text>CAP</text>				</string>
 </string_table>

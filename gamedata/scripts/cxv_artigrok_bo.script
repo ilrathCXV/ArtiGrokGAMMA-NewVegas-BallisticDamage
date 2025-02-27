@@ -1,4 +1,5 @@
 ----------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------
 -- CXV ArtiGrok BO: Taking pages from Artiballs and implementing them to GAMMA's GBO for better compatibility
 -- Credit to arti, haru, and Grok
 -- ilrathCXV (04/15/24): Started building this script
@@ -46,6 +47,7 @@ leg_meta_sniper_null = 1
 sniper_bad_bone_shit_reduce = 1
 
 integrated_silencer = {
+	["wpn_amb17"] = true,
 	["wpn_dvl10_m1"] = true,
 	["wpn_vssk"] = true,
 	["wpn_val_tac"] = true,
@@ -58,7 +60,7 @@ integrated_silencer = {
 	["wpn_mp5sd"] = true,
 	["wpn_mp5sd_custom"] = true,
 	["wpn_mp5sd_new"] = true,
-	
+	["wpn_sig_spear_cqb"] = true,
 	["wpn_pb"] = true,
 	["wpn_pb_bas"] = true,
 	["wpn_pb_custom"] = true,
@@ -70,12 +72,18 @@ integrated_silencer = {
 	["wpn_vintorez_nimble"] = true,
 	["wpn_vsk94"] = true,
 	["wpn_arbiter_bushmaster"] = true,
+	["wpn_delisle"] = true,
 	["wpn_700black"] = true,
 }
 
 snipers = {
 	["wpn_dvl10_m1"] = true,
 	["wpn_dvl10"] = true,
+	["wpn_steyr_scout"] = true,
+	["wpn_steyr_scout_big"] = true,
+	["wpn_axmc"] = true,
+	["wpn_axmc_black"] = true,	
+	["wpn_hecate_2"] = true,
 	["wpn_l96a1"] = true,
 	["wpn_l96a1m"] = true,
 	["wpn_m98b"] = true,
@@ -86,12 +94,35 @@ snipers = {
 	["wpn_remington700_magpul_pro"] = true,
 	["wpn_remington700_mod_x_gen3"] = true,
 	["wpn_remington700_steyr_scout_big"] = true,
+	["wpn_rem700_aics"] = true,
+	["wpn_rem700_mcmillan"] = true,	
 	["wpn_sv98"] = true,
 	["wpn_sv98_custom"] = true,
 	["wpn_k98_mod"] = true,
+	["wpn_k98_mod_silen98"] = true,
+	["wpn_kar98_retrotac"] = true,
 	["wpn_wa2000"] = true,
+	["wpn_mctac50"] = true,
 	["wpn_trg"] = true,
+	["wpn_rem7615"] = true,
 	["wpn_mosin"] = true,
+}
+
+lmgs = {
+	["wpn_pk_siber"] = true,
+	["wpn_pkm_siber"] = true,
+	["wpn_pkm_zenit_siber"] = true,
+	["wpn_pkp_siber"] = true,
+	["wpn_rpd"] = true,
+	["wpn_m134"] = true,
+	["wpn_m249"] = true,
+	["wpn_pkm_zenit_shorty"] = true,
+	["wpn_pkp_tac_siber"] = true,
+	["wpn_rpd_custom"] = true,
+	["wpn_rpk74_16_drum"] = true,
+	["wpn_rpk74_16"] = true,
+	["wpn_rpk"] = true,
+	["wpn_l86_lsw"] = true,
 }
 -- ilrathCXV (10/07/24): Players will now be able to decide if they want to enable/disable difficulty scaling for damage and/or AP power
 local difficulty_multiplier_damage = {
@@ -289,6 +320,8 @@ hp_rounds = {
 	
 	["ammo_20x70_buck"] = 2,
 
+	["ammo_338_federal"] = 10,				-- Might comment out later or make new ammo cuz ain't no one going to invest into using this as their mutant killer LMAO - CXV
+	
 -- ArtiGrok/modded additions
 	
 	["ammo_10x25_hydrashok"] = 2.5,
@@ -323,10 +356,14 @@ hp_rounds = {
 
 	["ammo_5.7x28_ss195_bad"] = 2.5,		-- 5.7 Fragmenting Round
 
+	["ammo_3006j_hp"] = 2,					-- It has good AP power, but it needs to be punishing for trying to brute-force armor
 }
 
 -----------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------
+-- Needed for checking monkeypatching in the G functions near bottom of script
+local flags = { ret_value = true }
+
 -- need to have a table to hold the valid data (look at Artiballs)
 function validate_hit(shit, bone_id, npc_id)
 	
@@ -361,6 +398,11 @@ function validate_hit(shit, bone_id, npc_id)
 
 	if ini_sys:r_string_ex(sec, "class") == "S_EXPLO" then return end
 	if IsItem("fake_ammo_wpn",sec) and not IsMelee(wpn) then return end
+	
+	local parent_sec = ini_sys:r_string_ex(sec,"parent_section")
+	if parent_sec then
+		sec = parent_sec
+	end
 	
 	return {
 		["wpn"] = wpn,
@@ -411,6 +453,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
         bullet_store[bullet_id] = hits
         CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
             bullet_store[bullet_id] = nil
+			return true
         end)
     end
 	
@@ -418,9 +461,11 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local wpn = validate_data.wpn
 	local sec = validate_data.sec
 	
-	local is_actor = false
+	local wpn_ap_modifier = ini_sys:r_float_ex(sec, "ap_modifier") or 1
+	
+	local is_shooter_actor = false
 	if shit.draftsman:id() == db.actor:id() then
-		is_actor = true
+		is_shooter_actor = true
 		bone_clear_time = time_global() + cxv_tick	-- reset the timer on clearing the bone tables
 	end
 
@@ -436,7 +481,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	bone_mult			= 1
 	is_critical			= false
 	
-	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.0.7 + NV   //////////////////")
+	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.1.9 + NV   //////////////////")
 	printf('%s about to be hit by %s in bone %s', monster and monster:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 
 	if (string.match(sec, "knife")) then
@@ -474,7 +519,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		if true_falloff then
 			if sec and integrated_silencer[sec] then
 				silencer_boost = 1.03
-			elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
+			elseif is_shooter_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
 				if wpn and wpn:weapon_is_silencer() then
 					silencer_boost = 1.03
 				end
@@ -597,6 +642,33 @@ function mutant_on_before_hit(monster, shit, bone_id)
 			is_critical = true
 		end
 	end
+		
+	if string.find(monster:name(), "hayzed_") then
+		spec_monster_mult = 0.80
+		if bone_id == 12 then
+			bone_mult = 2.00
+			printf("Critical Hit!")
+			is_critical = true
+		end
+	end
+	
+	if string.find(monster:name(), "lady_") then
+		spec_monster_mult = 0.80
+		if bone_id == 12 then
+			bone_mult = 2.00
+			printf("Critical Hit!")
+			is_critical = true
+		end
+	end
+	
+	if string.find(monster:name(), "skyrim_") then
+		spec_monster_mult = 0.80
+		if bone_id == 12 then
+			bone_mult = 2.00
+			printf("Critical Hit!")
+			is_critical = true
+		end
+	end
 
 	if string.find(monster:name(), "snork") then
 		spec_monster_mult = 1.10
@@ -659,7 +731,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local special_effect = 0
 	local special_effect_2 = 0
 	
-	if is_actor or npc_use_special then
+	if is_shooter_actor or npc_use_special then
 		special_effect = arti_handlers.get_special(ammo_section) or 0
 		special_effect_2 = arti_handlers.get_special_2(ammo_section) or 0
 	end
@@ -806,7 +878,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	if (special_effect == "lightning") or (special_effect_2 == "lightning") or (chaos_effect == 9) then
 		shit.type = hit.shock
 		
-		if is_critical and spec_monster_mult > 0.8 then
+		if is_critical and spec_monster_mult > 0.8 or ammo_section == "ammo_gauss" then
 			arti_handlers.lightning_damage(monster,bone_id, shit.weapon_id, 0.5)
 		elseif is_critical then
 			arti_handlers.lightning_damage(monster,bone_id, shit.weapon_id, 0.3)
@@ -854,7 +926,9 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		dist = 0
 	end
 	
-	local difficulty_dmg_mod = ((is_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
+	local damage_mod = ((is_shooter_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
+	
+	bone_mult = bone_mult * wpn_ap_modifier
 	
 	-- ilrathCXV (04/01/2024): True falloff calcs (credit to etapomom)
 	local falloff_modifier = 1
@@ -866,14 +940,14 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		local weapon_base_speed = SYS_GetParam(2, sec, "bullet_speed", 1)
 		falloff_modifier 	= (1.0 / momo_do_falloff(dist, sec, weapon_speed, ammo_speed, air_res, weapon_base_speed, silencer_boost))
 		
-		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * difficulty_dmg_mod
+		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * damage_mod
 	else
 		falloff_modifier = (1.0 / ( 1 + dist / 200 * ( air_res * 0.5 / ( 1 - air_res + 0.1 ))))
-		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * difficulty_dmg_mod * snake_mult * barrel_condition_corrected
+		shit.power = shit.power * falloff_modifier * mutant_mult * ammo_mult * spec_monster_mult * bone_mult * snake_mult * barrel_condition_corrected * damage_mod
 	end
 	printf("Barrel condition: %s, ArtiGrok BO output damage: %s, Ammo multiplier: %s, CQC multiplier: %s", barrel_condition, shit.power, ammo_mult, snake_mult)
 	printf("Mutant mult: %s, Spec Monster Mult: %s, Difficulty Damage Modifier: %s, Falloff Modifier: %s", mutant_mult, spec_monster_mult, difficulty_dmg_mod, falloff_modifier)
-	if is_actor then	-- ilrathCXV (04/11/2024): Will lock these off from NPCs always as these might be the bigger culprits/has no effect on them
+	if is_shooter_actor then	-- ilrathCXV (04/11/2024): Will lock these off from NPCs always as these might be the bigger culprits/has no effect on them
 		------------------------
 		-- [NEW] Graze Rounds --
 		------------------------
@@ -959,22 +1033,25 @@ function npc_on_before_hit(npc, shit, bone_id)
         bullet_store[bullet_id] = hits
         CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
             bullet_store[bullet_id] = nil
-        end)
+			return true
+		end)
     end
 	
 	local shooter = shit.draftsman
 	local wpn = validate_data.wpn
 	local sec = validate_data.sec
 	
-	local is_actor = false
+	local wpn_ap_modifier = ini_sys:r_float_ex(sec, "ap_modifier") or 1
+	
+	local is_shooter_actor = false
 	if shit.draftsman:id() == db.actor:id() then
 		bone_clear_time = time_global() + cxv_tick	-- reset the timer on clearing the bone tables
-		is_actor = true
+		is_shooter_actor = true
 	end
 	
 -- ////// Now, all of the GAMMA GBO + ArtiGrok stuff //////
 	
-	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.0.7 + NV  //////////////////")
+	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.1.9 + NV  //////////////////")
 	printf('%s about to be hit by %s in bone %s', npc and npc:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 	
 --////////////// DATA PARSING OF HELL - A BONES AND BOOLETS TALE //////////////
@@ -996,8 +1073,8 @@ function npc_on_before_hit(npc, shit, bone_id)
 		end
 	end
 	
-	if is_actor then
-		printf("Section is: %s", sec)
+	if is_shooter_actor then
+--		printf("Section is: %s", sec)
 		wpn_kind = ini_sys:r_string(sec, "kind") or nil
 	end
 	
@@ -1007,7 +1084,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if true_falloff then
 			if sec and integrated_silencer[sec] then
 				silencer_boost = 1.03
-			elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
+			elseif is_shooter_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
 				if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
 					silencer_boost = 1.03
 				end
@@ -1015,7 +1092,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		else
 			if sec and integrated_silencer[sec] then
 				silencer_boost = 1.07
-			elseif is_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
+			elseif is_shooter_actor then	-- cannot access if NPC's weapon has a suppressor, so limit weapons not on the list to the player
 				if wpn and (wpn:weapon_silencer_status() == 1) or (wpn:weapon_silencer_status() == 2 and wpn:weapon_is_silencer()) then
 					silencer_boost = 1.07
 				end
@@ -1038,7 +1115,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local special_effect = 0
 	local special_effect_2 = 0
 	
-	if is_actor or npc_use_special then
+	if is_shooter_actor or npc_use_special then
 		special_effect = arti_handlers.get_special(ammo_section) or 0
 		special_effect_2 = arti_handlers.get_special_2(ammo_section) or 0
 	end
@@ -1183,6 +1260,8 @@ function npc_on_before_hit(npc, shit, bone_id)
 		bone_id = 15
 	end
 	
+	local is_zombified = false
+	
 	local custom_bone_id = (npc_id.."_"..bone_id)
 	custom_bone_dmg[custom_bone_id] = tonumber(bone_damage_multiplier)
 
@@ -1281,6 +1360,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if faction == "zombied" then
 			sin_res = 0.3
 			isg_res = 1
+			is_zombified = true
 		end
 		
 --	/////// CHECK IF NPC IS FROM THE ISG FACTION TO REDUCE PENETRATION AND DAMAGE //////
@@ -1335,7 +1415,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local custom_bone_ap_scale = custom_bone_ap[custom_bone_id]
 	local custom_bone_hitfraction = custom_bone_hf[custom_bone_id]
 	
-	-- ilrathCXV (07/26/24): Shotgun AP bonuses now appropriately and proportionally given to multi-pellet/multi-projectile ammo
+	-- ilrathCXV (07/26/24): GAMMA's shotgun AP bonuses now appropriately and proportionally given to multi-pellet/multi-projectile ammo
 	if tonumber(bone_ap_boost) >= 3 and tonumber(bone_id) <= 9 then -- leg meta, bullets ap boost in legs
 		if pellet_count > 1 then
 			k_ap = ( k_ap + round_idp((0.117 / pellet_count), 3) ) -- buck still receives 0.013 like normal
@@ -1355,6 +1435,12 @@ function npc_on_before_hit(npc, shit, bone_id)
 	if snipers[wpn:section()] then
 		k_ap = k_ap + 0.05
 	end
+	if lmgs[wpn:section()] then
+		k_ap = k_ap + 0.03
+	end
+	
+	k_ap = k_ap * custom_bone_ap_scale * barrel_condition_corrected * wpn_ap_modifier -- reduce bullet ap following npc ap scale and barrel condition
+
 	------------------
 	-- Chaos Rounds --
 	------------------
@@ -1402,6 +1488,11 @@ function npc_on_before_hit(npc, shit, bone_id)
 		bas_handler.corrosive_cloud(npc, bone_id)
 	end
 	
+	-- KS-23 Eco + 23x75 Cloudkill will OHK all zombified Stalkers (take its remaining health and add it to the weapon hit power)
+	if ammo_section == "ammo_23_eco" and is_zombified then
+		wpn_hit_power = wpn_hit_power + npc.health
+		npc:set_health_ex(0.001)
+	end
 	
 	local ignore_resistances = 0
 	local ignore_high_armor_resist = 0
@@ -1503,7 +1594,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		shit.type = hit.shock
 		if (custom_bone_armor >= 3) then
 			arti_handlers.lightning_damage(npc,bone_id, shit.weapon_id, custom_bone_armor * 0.5)
-		elseif (tonumber(bone_id) >= 14 and tonumber(bone_id) <= 19) then
+		elseif (tonumber(bone_id) >= 14 and tonumber(bone_id) <= 19) or ammo_section == "ammo_gauss" then
 			arti_handlers.lightning_damage(npc,bone_id, shit.weapon_id, clamp(custom_bone_armor * 2, 0.3, 2))
 		else
 			arti_handlers.lightning_damage(npc,bone_id, shit.weapon_id, clamp(custom_bone_armor, 0.3, 1))
@@ -1536,6 +1627,14 @@ function npc_on_before_hit(npc, shit, bone_id)
 		end
 	end
 	
+	------------------------
+	-- Varmageddon Rounds --
+	------------------------
+	local varma_mult = 1
+	-- 60% more damage to mutants and now Zombified Stalkers
+	if is_zombified and (special_effect == "varma") or (special_effect_2 == "varma") then
+		varma_mult = 1.6
+	end
 	-----------------
 	-- Grav Rounds --
 	-----------------
@@ -1544,7 +1643,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- For pistols and shotguns, they start at 50m (will have around 20.3% mult at 100m)
 	local grav_mult = 1.0
 	if (special_effect == "grav") or (special_effect_2 == "grav") then
-		if is_actor then
+		if is_shooter_actor then
 			local wpn_type = ini_sys:r_string(wpn:section(), "kind") or nil
 			local min_dist = 0 -- desired min. range gor Grav to take effect
 			local grav_effect_mult = 0	-- take 1/(300 - min_dist)
@@ -1610,7 +1709,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	--						 So, to better mimic them but not bring them down so much as to make them pea-shooters, overall weapon power will be reduced by 25%.
 	--						 Shotguns will be less affected.
 	
-	if is_actor then 
+	if is_shooter_actor then 
 		if wpn_kind == "w_shotgun" then
 			wpn_hit_power = wpn_hit_power * 0.85
 		else
@@ -1638,7 +1737,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		total_resist_modifier = math.max(total_resist_modifier, (1 - resist_limiter))
 	end
 	
-	local difficulty_ap_mod = ((is_actor and (difficulty_scaling_ap and difficulty_multiplier_ap[game_num] or 1)) or (difficulty_scaling_ap and npc_difficulty_multiplier_ap[game_num] or 1)) or 1	
+	local difficulty_ap_mod = ((is_shooter_actor and (difficulty_scaling_ap and difficulty_multiplier_ap[game_num] or 1)) or (difficulty_scaling_ap and npc_difficulty_multiplier_ap[game_num] or 1)) or 1	
 	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * difficulty_ap_mod -- * 0.80
 
 	-- ilrathCXV (07/28/24): - Fixed DR not being applied before final Resist Damage calculations
@@ -1653,9 +1752,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- ilrathCXV (07/29/24): Let's fix up the logic to *actually* match New Vegas (find DMG * DR, then do the threshold logic)
 	resist_damage = resist_damage * total_resist_modifier
 	
-	resist_damage = math.max((resist_damage * 0.2), (resist_damage  - remaining_dmg_threshold))
+	resist_damage = math.max((starter_damage * 0.2), (resist_damage  - remaining_dmg_threshold))
 	
-	printf('(2) Resist Damage: %s | Base DT: %s | Difficulty AP Mod: %s | AP Power: %s | Real DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, difficulty_ap_mod, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
+	printf('(2) Resist Damage: %s | Base DT: %s | Difficulty AP Mod: %s | AP Power: %s | Remaining DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, difficulty_ap_mod, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
 	
 -- ///// (3) Final Base DMG calculations /////
 	local final_base_damage = resist_damage
@@ -1702,14 +1801,8 @@ function npc_on_before_hit(npc, shit, bone_id)
 		CreateTimeEvent("reduce_npc_broken"..npc:id()..math.random(1,100), npc:id(), 5.0, reduce_npc_broken, npc:id())
 	end
 	
-	-- ilrathCXV (07/26/24): If there is not a full pen. hit, subtract the remaining DT from the current damage
-	--						 Headhunter/Basher headshots will skip this step
---	if new_remaining_threshold > 0 and ignore_high_armor_resist == 0 then
---		final_base_damage = math.max(0.0025, (final_base_damage - new_remaining_threshold))
---	end
-	
-	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult
-	local difficulty_dmg_mod = ((is_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
+	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult * varma_mult
+	local difficulty_dmg_mod = ((is_shooter_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
 	
 	-- ilrathCXV (10/06/24): Reduce locational modifer by 70% or x0.3 for companions
 	local total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce * (((npc:has_info("npcx_is_companion")) and 0.3) or 1.0)
@@ -1718,6 +1811,14 @@ function npc_on_before_hit(npc, shit, bone_id)
 	end
 	
 	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_dmg_mod
+	
+	-- ilrathCXV (01/22/25): Going to SendCallback here to help this mimic GAMMA's damage logic steps (PBA before final reductions)
+	local old_shit_damage = shit.power
+	shit.power = final_base_damage
+	SendScriptCallback("npc_on_before_hit",npc,shit,bone_id, flags)
+	final_base_damage = shit.power
+	shit.power = old_shit_damage
+	
 	final_base_damage = math.max(final_base_damage, ((0.01 * flinch_mult)/pellet_count))
 	
 	-- ilrathCXV (07/26/24): If the player has broken a part of the enemy's DT, this enables a larger floor for allowed damage when hitting body parts that haven't been broken
@@ -1736,39 +1837,41 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_dmg_mod, new_remaining_threshold)
 	
-	if is_actor then	-- ilrathCXV (04/11/2024): Will lock these out for NPCs always as they are the bigger culprits/will gain no effect from them
-		----------------
-		-- RIP Rounds --
-		----------------
-		-- Grants healing on successful hits
-		if (special_effect == "rip") or (special_effect_2 == "rip") then 
-			arti_handlers.lifesteal(npc, shit.power , false)
-		end
-		
-		------------------
-		-- Chaos Rounds --
-		------------------
-		if chaos_effect == 5 then
-			db.actor.health = clamp(db.actor.health + (0.1 * shit.power), 0, 1)
-		end
-		
-		------------------
-		-- Graze Rounds --
-		------------------
-		if (special_effect == "graze") or (special_effect_2 == "graze") or (chaos_effect == 11) then 
-			local new_hit = shit
+	if flags.ret_value then
+		if is_shooter_actor then	-- ilrathCXV (04/11/2024): Will lock these out for NPCs always as they are the bigger culprits/will gain no effect from them
+			----------------
+			-- RIP Rounds --
+			----------------
+			-- Grants healing on successful hits
+			if (special_effect == "rip") or (special_effect_2 == "rip") then 
+				arti_handlers.lifesteal(npc, shit.power , false)
+			end
 			
-			local new_hit = hit()
-			new_hit.type = shit.type 
-			new_hit.draftsman = shit.draftsman
-			new_hit.bone = shit.bone
-			new_hit.weapon_id = shit.weapon_id
-			new_hit.power = (is_critical and (shit.power * 0.25)) or (shit.power * 0.05)
-		
-			local radius = (is_critical and 8) or 5
-			arti_handlers.graze_handler(npc, new_hit, radius)
+			------------------
+			-- Chaos Rounds --
+			------------------
+			if chaos_effect == 5 then
+				db.actor.health = clamp(db.actor.health + (0.1 * shit.power), 0, 1)
+			end
 			
-			-- printf("ERROR CHECKING: Shit power: %s", shit.power)
+			------------------
+			-- Graze Rounds --
+			------------------
+			if (special_effect == "graze") or (special_effect_2 == "graze") or (chaos_effect == 11) then 
+				local new_hit = shit
+				
+				local new_hit = hit()
+				new_hit.type = shit.type 
+				new_hit.draftsman = shit.draftsman
+				new_hit.bone = shit.bone
+				new_hit.weapon_id = shit.weapon_id
+				new_hit.power = (is_critical and (shit.power * 0.25)) or (shit.power * 0.05)
+			
+				local radius = (is_critical and 8) or 5
+				arti_handlers.graze_handler(npc, new_hit, radius)
+				
+				-- printf("ERROR CHECKING: Shit power: %s", shit.power)
+			end
 		end
 	end
 	
@@ -1893,6 +1996,37 @@ function bullet_on_impact(bullet)
 	
 end
 
+gbo_adb = grok_actor_damage_balancer.actor_on_before_hit
+function grok_actor_damage_balancer.actor_on_before_hit(shit, bone_id, flags)
+	
+	-- checking for multi-hits from recorded hits (e.g. one bullet hitting multiple bones)
+    local bullet_id = shit.bullet_id
+    if bullet_id and bullet_store[bullet_id] then
+        local bullet_hits = bullet_store[bullet_id]
+		-- bullet on_impact was stored and no hit has been detected yet -- hit the player and increment counter by 1 to avoid multi-hit
+        if bullet_hits[AC_ID] and bullet_hits[AC_ID] == 0 then
+            bullet_hits[AC_ID] = 1
+			
+		-- bullet has already had a hit recorded -- don't hit the player and nullify the hit
+        else													
+            flags.ret_value = false
+            shit.power = 0.0
+            shit.bone_id = 65535
+            return
+        end 
+    elseif bullet_id then
+        -- no impact recorded - add to store and flush later + hit the player
+        hits = {[AC_ID] = 1}
+        bullet_store[bullet_id] = hits
+        CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
+            bullet_store[bullet_id] = nil
+			return true
+        end)
+    end
+
+    gbo_adb(shit, bone_id, flags)
+end
+
 local bullet_check = {}
 
 -- ilrathCXV: Used to check for ricochets (bullet should only "explode" or "ignite" on destroy call)
@@ -1900,6 +2034,7 @@ function aoe_handler(bullet)
 	-- in case of ricochet...?
 	if bullet.target_id == 65535 and bullet_check[bullet.bullet_id] then return end
 	if bullet.target_id == 65535 then bullet_check[bullet.bullet_id] = true end
+	if bullet.parent_id ~= AC_ID and not npc_use_special then return end
 	
 	-- printf("ArtiGrok BO - Bullet section: %s", bullet.section)
 	
@@ -1973,23 +2108,24 @@ end
 
 -- ArtiBalls: Now the real fun begins - _G script monkeypatches
 -- Overriding hit callbacks so our custom hits can communicate with other scripts
-local flags = { ret_value = true }
+-- local flags = { ret_value = true }	-- Moved higher up in the script
 
 _G.CAI_Stalker__BeforeHitCallback = function(npc,shit,bone_id)
     flags.ret_value = true
     local custom_hit = npc_on_before_hit(npc,shit,bone_id, true)
     if custom_hit then
-        SendScriptCallback("npc_on_before_hit",npc,custom_hit.shit,custom_hit.bone_id, flags)
-        if flags.ret_value then
-			printf("ArtiGrok BO - True final hit power: %s", custom_hit.shit.power)
-            if custom_hit.shit.type ~= hit.fire_wound then
+        --SendScriptCallback("npc_on_before_hit",npc,custom_hit.shit,custom_hit.bone_id, flags)
+		if flags.ret_value then
+			-- printf("ArtiGrok BO - New hit power: %s", custom_hit.shit.power)
+            if custom_hit.shit.type ~= hit.fire_wound and custom_hit.shit.type ~= hit.wound then
                 shit.power = custom_hit.shit.power
             else
-				if custom_hit.surrender_bonus == 1 then
+				if custom_hit.surrender_bonus == 1 and (custom_hit.shit.power < npc.health) then
 					npc:set_health_ex(0.0)
 				else
 					npc:set_health_ex(npc.health - custom_hit.shit.power)
 				end
+				-- printf("Enemy remaining HP: %s", npc.health)
                 shit.power = 0.0001 -- removing engine stuff
             end
         end
@@ -2042,7 +2178,7 @@ function actor_on_update()
 	
 	empty_table(bas_handler.weakened)
 	
-	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.0.7 + NV //////////////////")
+	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.1.9 + NV //////////////////")
 	
 end
 
