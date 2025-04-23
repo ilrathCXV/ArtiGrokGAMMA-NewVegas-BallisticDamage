@@ -44,7 +44,7 @@ local bullet_store_list = {}	-- multi-hit fix will now be here (remember to empt
 local graze_bullet_dmg_list = {}
 -----------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------
-
+game_num = 1
 leg_meta_sniper_null = 1
 sniper_bad_bone_shit_reduce = 1
 
@@ -494,7 +494,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	bone_mult			= 1
 	is_critical			= false
 	
-	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.2.0 + NV   //////////////////")
+	printf("///////////   Mutant Hit registered: ArtiGrok BO  v2.2.2 + NV   //////////////////")
 	printf('%s about to be hit by %s in bone %s', monster and monster:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 
 	if (string.match(sec, "knife")) then
@@ -614,7 +614,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		spec_monster_mult = 0.95
 		
 		if bone_id == 15 or bone_id == 33 then	-- back legs/thighs
---			bone_mult = 1.20
+			bone_mult = 1.20
 			printf("Critical Hit!")
 			is_critical = true
 		end
@@ -723,19 +723,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		end
 	end
 	
-	-- ilrathCXV (04/01/2024): try to save on performance whereever possible (if no scaling, doesn't matter which index is used)
-	local game_num = 1
-	
-	if difficulty_scaling_damage then
-		local gameplay = alife_storage_manager.get_state().diff_game
-		if not (type(gameplay) == "table") then -- for old saves
-			alife_storage_manager.get_state().diff_game = {}
-			alife_storage_manager.get_state().diff_game["type"] = game_num
-			gameplay = alife_storage_manager.get_state().diff_game
-		end
-	
-		game_num = gameplay["type"] or game_num
-	end
+	-- NOTE: Difficulty index is determined in actor_on_first_update() now
 	
 	-----------------------------------------------------------------------
 	------------------------- Arti's Bonuses ------------------------------
@@ -1069,7 +1057,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 -- ////// Now, all of the GAMMA GBO + ArtiGrok stuff //////
 	
-	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.2.0 + NV  //////////////////")
+	printf("///////////   Stalker Hit registered: ArtiGrok BO  v2.2.2 + NV  //////////////////")
 	printf('%s about to be hit by %s in bone %s', npc and npc:name(), shit and shit.draftsman and shit.draftsman:name(), bone_id)
 	
 --////////////// DATA PARSING OF HELL - A BONES AND BOOLETS TALE //////////////
@@ -1318,7 +1306,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 
 		custom_bone_value[custom_bone_id] = tonumber(p[2])
 
-		if npc:section() == "monolith_eidolon" then
+		if npc:section() == "monolith_eidolon" or string.find(npc:name(), "eidolon") then
 			custom_bone_value[custom_bone_id] = 4
 			-- Add a gravi shield effect to make Eidolon even more unique
 			pos = npc:bone_position(custom_bone_name)
@@ -1351,7 +1339,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		local se_obj = alife_object(npc:id())
 		local faction = se_obj:community()
 		sin_res = 1
-		if faction == "greh" then
+		if faction == "greh" or faction == "greh_npc" then
 			sin_res = 0.30
 			isg_res = 0.90
 			pos = npc:bone_position(custom_bone_name)
@@ -1411,19 +1399,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 
 --////////////// ACTUAL INTERESTING MATH PART ABOUT BALLISTICS //////////////
 	
-	-- ilrathCXV (04/01/2024): try to save on performance whereever possible (if no scaling, doesn't matter which index is used)
-	local game_num = 1
-	
-	if difficulty_scaling_ap or difficulty_multiplier_damage then
-		local gameplay = alife_storage_manager.get_state().diff_game
-		if not (type(gameplay) == "table") then -- for old saves
-			alife_storage_manager.get_state().diff_game = {}
-			alife_storage_manager.get_state().diff_game["type"] = game_num
-			gameplay = alife_storage_manager.get_state().diff_game
-		end
-	
-		game_num = gameplay["type"] or game_num
-	end
+	-- NOTE: Difficulty index is determined in actor_on_first_update() now
 	
 	printf('%s shot with %s, Weapon power= %s, AP power= %s, Hit multiplier= %s, Air res= %s, Distance= %s m, Barrel condition: %s', ammo_section, sec, wpn_hit_power, k_ap, k_hit, air_res, dist, barrel_condition)
 	printf('Bone hit= %s, Bone damage mult= %s, Bone AP scale= %s, Bone hit fraction= %s, Bone armor= %s', custom_bone_name, custom_bone_dmg[custom_bone_id], custom_bone_ap[custom_bone_id], custom_bone_hf[custom_bone_id], custom_bone_value[custom_bone_id])
@@ -1682,6 +1658,9 @@ function npc_on_before_hit(npc, shit, bone_id)
 		dist = 0
 	end
 	
+	local ap_mod = ((is_shooter_actor and (difficulty_scaling_ap and difficulty_multiplier_ap[game_num] or 1)) or (difficulty_scaling_ap and npc_difficulty_multiplier_ap[game_num] or 1)) or 1
+	local damage_mod = ((is_shooter_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
+	
 	-- ilrathCXV (07/25/24): Time to New Vegas ballistic damage
 	--		Starter Base Damage values:
 	--					- DMG = wpn_hit_power
@@ -1745,8 +1724,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		total_resist_modifier = math.max(total_resist_modifier, (1 - resist_limiter))
 	end
 	
-	local difficulty_ap_mod = ((is_shooter_actor and (difficulty_scaling_ap and difficulty_multiplier_ap[game_num] or 1)) or (difficulty_scaling_ap and npc_difficulty_multiplier_ap[game_num] or 1)) or 1	
-	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * difficulty_ap_mod -- * 0.80
+	k_ap = k_ap * falloff_modifier * isg_res * silencer_boost * ap_mod -- * 0.80
 
 	-- ilrathCXV (07/28/24): - Fixed DR not being applied before final Resist Damage calculations
 	--						 - If DT is not broken, HP penalty is applied to increase the REMAINING DT after subtraction from AP power
@@ -1768,7 +1746,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	end
 	
 	
-	printf('(2) Resist Damage: %s | Base DT: %s | Difficulty AP Mod: %s | AP Power: %s | Remaining DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, difficulty_ap_mod, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
+	printf('(2) Resist Damage: %s | Base DT: %s | Difficulty AP Mod: %s | AP Power: %s | Remaining DT: %s | Real DR: %s%', resist_damage, custom_bone_armor, ap_mod, k_ap, ((hp_penality_modifier ~= 1 and (remaining_dmg_threshold * hp_no_penetration_penalty)) or remaining_dmg_threshold), ((1 - total_resist_modifier) * 100))
 	
 -- ///// (3) Final Base DMG calculations /////
 	local final_base_damage = resist_damage
@@ -1816,7 +1794,6 @@ function npc_on_before_hit(npc, shit, bone_id)
 	end
 	
 	local total_ammo_mult = k_hit * ammo_mult * hp_penality_modifier * grav_mult * fragment_mult * ambush_mult * chaos_mult * varma_mult
-	local difficulty_dmg_mod = ((is_shooter_actor and (difficulty_scaling_damage and difficulty_multiplier_damage[game_num] or 1)) or (difficulty_scaling_damage and npc_difficulty_multiplier_damage[game_num] or 1)) or 1
 	
 	-- ilrathCXV (10/06/24): Reduce locational modifer by 70% or x0.3 for companions
 	local total_locational_modifier = (custom_bone_dmg_mult * 1.1) * sniper_bad_bone_shit_reduce * (((npc:has_info("npcx_is_companion")) and 0.3) or 1.0)
@@ -1824,7 +1801,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		total_locational_modifier = math.min(total_locational_modifier, 2.0)
 	end
 	
-	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * difficulty_dmg_mod
+	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * damage_mod
 	
 	-- ilrathCXV (01/22/25): Going to SendCallback here to help this mimic GAMMA's damage logic steps (PBA before final reductions)
 	SendScriptCallback("npc_on_before_hit",npc,shit,bone_id, flags)
@@ -1844,7 +1821,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	final_base_damage = round_idp(final_base_damage, 3)
 	shit.power = final_base_damage
 	
-	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, difficulty_dmg_mod, new_remaining_threshold)
+	printf('(3) Final Base Damage: %s | Total AM: %s | Total LM: %s | Difficulty: %s | Extra AP needed to break DT: %s', final_base_damage, total_ammo_mult, total_locational_modifier, damage_mod, new_remaining_threshold)
 	
 	if flags.ret_value then
 		if is_shooter_actor then	-- ilrathCXV (04/11/2024): Will lock these out for NPCs always as they are the bigger culprits/will gain no effect from them
@@ -2000,7 +1977,8 @@ function bullet_on_impact(bullet)
         
         CreateTimeEvent("bullet_remove", bullet.bullet_id, 0.1, function()
             bullet_store_list[bullet.bullet_id] = nil
-        end)
+ 			return true
+       end)
     end
 	
 	-- ilrathCXV: My way of doing bullet handlers
@@ -2196,8 +2174,18 @@ function actor_on_update()
 	
 	empty_table(bas_handler.weakened)
 	
-	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.2.0 + NV //////////////////")
+	printf("///////////   Bone/Effect Tables Reset: ArtiGrok BO  v2.2.2 + NV //////////////////")
 	
+end
+
+function actor_on_first_update()
+	gameplay = alife_storage_manager.get_state().diff_game
+	if not (type(gameplay) == "table") then -- for old saves
+		alife_storage_manager.get_state().diff_game = {}
+		alife_storage_manager.get_state().diff_game["type"] = game_num
+		gameplay = alife_storage_manager.get_state().diff_game
+	end
+	game_num = gameplay["type"] or game_num
 end
 
 function reset_dmg_threshold(custom_bone_id, custom_bone_armor, npc_id)
@@ -2221,7 +2209,8 @@ end
 function on_game_start()
 	RegisterScriptCallback("bullet_on_impact", bullet_on_impact)
 	RegisterScriptCallback("bullet_on_remove", bullet_on_remove)
-	RegisterScriptCallback("actor_on_update", actor_on_update)
+--	RegisterScriptCallback("actor_on_update", actor_on_update)
+	RegisterScriptCallback("actor_on_first_update",actor_on_first_update)
 	
 	-- ilrathCXV (04/01/2024): MCM options
 	RegisterScriptCallback("on_option_change",on_option_change)
