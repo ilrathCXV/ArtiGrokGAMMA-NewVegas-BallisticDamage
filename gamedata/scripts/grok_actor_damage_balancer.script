@@ -187,6 +187,8 @@ local no_pen_dmg_divisors = {
 	["ammo_338_federal"] = 9,
 }
 
+local flags = { ret_value = true }
+local player_died = false
 function get_game_factor(key)
 	--printf("Gameplay difficulty factor requested: [" .. key .. "] = " .. tostring(factors_game[key]))
 	return factors_game[key]
@@ -215,7 +217,8 @@ function get_outfit_ap_res(obj)
 			armor_bone_value = (1 - helmet_hit_frac) or 0
 		end
 
-		return armor_bone_value * obj:condition()
+		-- return armor_bone_value * obj:condition()
+		return armor_bone_value
 	end
 end
 
@@ -593,16 +596,16 @@ function get_protection(shit,bone_id,k_ap,hp_rounds)
 		
 		-- ilrathCXV (07/25/24): This will count as the "Perks" modifiers
 		-- etapomom: run on_before_hit before doing armor math
-		local pbadamage = hit(shit)
-		PBA_a_obh(pbadamage, bone_id, flags)
+--		local pbadamage = hit(shit)
+--		PBA_a_obh(pbadamage, bone_id, flags)
 		
-		if pbadamage.power ~= shit.power then
-			printf('Damage set to PBA damage: %s', pbadamage.power)
-		end
+--		if pbadamage.power ~= shit.power then
+--			printf('Damage set to PBA damage: %s', pbadamage.power)
+--		end
 		
-		shit.power = pbadamage.power
+--		shit.power = pbadamage.power
 		
-		shit.power = round_idp(shit.power, 3)
+--		shit.power = round_idp(shit.power, 3)
 		
 		total_prot = total_resist_modifier
 		if not is_stat_checking then
@@ -752,9 +755,11 @@ function get_outfit_value(obj, sec, name, def)
 end
 
 local pba = perk_based_artefacts
+function perk_based_artefacts.actor_on_before_death(whoID, flags) end
+--[[
+
 function perk_based_artefacts.actor_on_before_hit(s_hit, bone_id, flags) end
 function perk_based_artefacts.actor_on_hit_callback(obj, amount, local_direction, who, bone_index) end
-function perk_based_artefacts.actor_on_before_death(whoID, flags) end
 
 function PBA_a_obh(shit, bone_id, flags)
 	--trace('Firing PBA >> actor_on_before_hit')
@@ -775,6 +780,7 @@ function PBA_a_obd(whoID, flags)
 	flags.ret_value = false
 	perk_based_artefacts.process_artefacts(perk_based_artefacts.artefact_on_before_death_functions, whoID, flags)
 end
+]]
 
 function shit_booster(shit, bone_id, k_ap, hp_rounds)
 	
@@ -821,11 +827,6 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 	end
 	
 	if shit.type ~= hit.fire_wound then
-		-- etapomom: run on_before_hit before doing armor math
-		local pbadamage = hit(shit)
-		PBA_a_obh(pbadamage, bone_id, flags)
-		shit.power = pbadamage.power
-	
 		damage = shit.power * ( 1 - player_protection )
 	
 		-- Body part damage multiplier (already applied by engine in shit.power)
@@ -833,6 +834,12 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 		local body_part_mult = hitbox_mult[body_part] or 1.0
 		damage = damage * body_part_mult
 	end
+	
+	-- etapomom: run on_before_hit before doing armor math
+	--	local pbadamage = hit(shit)
+	--	PBA_a_obh(pbadamage, bone_id, flags)
+	--	shit.power = pbadamage.power
+		SendScriptCallback("actor_on_before_hit", shit, bone_id, flags)
 	
 --	printf('Checking for one-hit protection ... Player HP: %s | Hit Power: %s | DMG > Health?: %s | Health > 65HP?: %s', db.actor.health, damage, damage >= db.actor.health, db.actor.health >= 0.65)
 	-- Resolve mechanic, survive with few hp instead of dying from huge hits
@@ -846,7 +853,13 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 	printf('damage to actor = %s', damage)
 	
 	if zzz_player_injuries and zzz_player_injuries_mcm then
-		if zzz_player_injuries.actor_on_hit_callback then
+		-- For BHSRO users
+		if zzz_player_injuries.actor_on_hit_callback and zzz_player_injuries.surgeryhp then
+			zzz_player_injuries.actor_on_before_hit(shit, bone_id)
+			zzz_player_injuries.actor_on_hit_callback(db.actor, damage, shit.direction, shit.draftsman, bone_id)
+			
+		-- For normal GAMMA BHS users (inputs are wrong but putting it the way Grok had it)	
+		elseif zzz_player_injuries.actor_on_hit_callback then
 			zzz_player_injuries.actor_on_hit_callback(bone_id)
 		end
 	end
@@ -854,25 +867,31 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 	shit.power = 0
 	
 	-- etapomom: run on_before_death, make the seraphim work with ironman. maybe the only cool thing about making damage this inflexible
+	local death_flags = { ret_value = true }
 	if (db.actor.health - damage) <= 0 then
-		PBA_a_obd(db.actor, flags)
+		perk_based_artefacts.process_artefacts(perk_based_artefacts.artefact_on_before_death_functions, db.actor, death_flags)
+		if death_flags.ret_value == false then
+			flags.ret_value = false
+		end
 	end
 	
-	db.actor:set_health_ex(db.actor.health - damage)
-	
-	-- Bleed rework: 10 times less chance of bleeding, scaling with damage, but bleeding power is increased in actor ltx
-	if no_pen == 0 then
-		if shit.type == hit.fire_wound or shit.type == hit.wound then
-			local bleed_chance = math.random(1,100)
-			local bleed_mult = 1 + damage
-			local bleed_score = bleed_chance * bleed_mult
-			if bleed_score >= 85 then
-				db.actor:cast_Actor():conditions():AddWound(damage, hit_type, bone_id)
+	if death_flags.ret_value == true then
+		db.actor:set_health_ex(db.actor.health - damage)
+		-- Bleed rework: 10 times less chance of bleeding, scaling with damage, but bleeding power is increased in actor ltx
+		if no_pen == 0 then
+			if shit.type == hit.fire_wound or shit.type == hit.wound then
+				local bleed_chance = math.random(1,100)
+				local bleed_mult = 1 + damage
+				local bleed_score = bleed_chance * bleed_mult
+				if bleed_score >= 85 then
+					db.actor:cast_Actor():conditions():AddWound(damage, hit_type, bone_id)
+				end
 			end
 		end
 	end
 	
-	PBA_a_ohc(db.actor, damage, shit.direction, shit.draftsman, bone_id)
+	SendScriptCallback("actor_on_hit_callback", db.actor, damage, shit.direction, shit.draftsman, bone_id)
+--	PBA_a_ohc(db.actor, damage, shit.direction, shit.draftsman, bone_id)
 	
 	previous_hitbox = bone_id
 
@@ -918,10 +937,16 @@ end
 
 local trigger = 0
 local trigger_mine = 0
-local delay = 500
+local trigger_field = 0
+local delay = 750
 local delay_mine = 10
+local tg = 0
+local grok_delay_field = 0
+local grok_delay_mine = 0
 
+-- ilrathCXV (07/09/25): Currently, with experimental _G monkeyscript, this makes mines act very weird - will make them always go through shit_booster like psi damage
 function elemental_damage(draftman_sec, shit, bone_id, flags)
+	printf("[ADB] Elemental damage from %s", draftman_sec)
 	tg = time_global()
 	if string.find(draftman_sec,"field") then
 		if trigger_field == 0 then
@@ -931,8 +956,12 @@ function elemental_damage(draftman_sec, shit, bone_id, flags)
 		if (trigger_field == 1 and tg > grok_delay_field) then
 			trigger_field = 0
 			shit_booster(shit,bone_id)
-		end	
+		else
+			shit.power = 0
+			flags.ret_value = false
+		end
 	elseif string.find(draftman_sec,"mine") then
+		printf("Is shit type shock?: %s", shit.type == hit.shock)
 		if shit.type == hit.chemical_burn or shit.type == hit.light_burn or shit.type == hit.burn then
 			if trigger_mine == 0 then
 				grok_delay_mine = tg + delay_mine
@@ -941,13 +970,17 @@ function elemental_damage(draftman_sec, shit, bone_id, flags)
 			if (trigger_mine == 1 and tg > grok_delay_mine) then
 				trigger_mine = 0
 				shit_booster(shit,bone_id)
+			else
+				shit.power = 0
+				flags.ret_value = false
 			end
+		else	-- these other elementals should still be going through your defenses (this was missing)
+			shit_booster(shit,bone_id)
 		end
 	else
 		shit_booster(shit,bone_id)
 	end
 
-	flags.ret_value = false
 end
 
 function psi_damage(draftman_sec, shit, bone_id, flags)
@@ -956,7 +989,7 @@ function psi_damage(draftman_sec, shit, bone_id, flags)
 	snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
 	snd.volume = math.random(40,65)/100
 	shit_booster(shit,bone_id)
-	flags.ret_value = false
+--	flags.ret_value = false
 end
 
 local trigger2 = 0
@@ -1057,19 +1090,26 @@ function actor_on_before_hit(shit,bone_id, flags)
 	-- Reduce shotguns damage and get ammo AP power
 		if (shit.type == hit.fire_wound) then
 
-			wpn = level.object_by_id(shit.weapon_id)
-
-			if wpn == nil then return end
-
-			local sec = wpn:section()
-			local wpn_id = wpn:id()
-
-			local ammo_type_number = wpn:get_ammo_type()
-			local ammo_list = utils_item.get_ammo(sec, wpn_id)
-			local ammo_section = ammo_list[ammo_type_number+1]
-
-			if ammo_section == nil then return end
+			local ammo_section
+			if shit.draftsman:section() == m_car then
+				ammo_section = "ammo_pkm_100"
+			else
+				wpn = level.object_by_id(shit.weapon_id)
+	
+				if wpn == nil then return end
+	
+				local sec = wpn:section()
+				local wpn_id = wpn:id()
+	
+				local ammo_type_number = wpn:get_ammo_type()
+				local ammo_list = utils_item.get_ammo(sec, wpn_id)
+				ammo_section = ammo_list[ammo_type_number+1]
+	
+				if ammo_section == nil then return end
+			end
 			
+			printf("[ADB] Ammo hitting actor: %s", ammo_section)
+
 			local hp_rounds = 1
 			
 			if cxv_artigrok_bo then
@@ -1129,28 +1169,28 @@ function actor_on_before_hit(shit,bone_id, flags)
 		end
 
 		if shit.type == hit.light_burn then
-			elemental_damage(shit.draftsman:id(), shit, bone_id, flags)
+			elemental_damage(shit.draftsman:section(), shit, bone_id, flags)
 			flags.ret_value = false
 		end
 
 		if shit.type == hit.burn then
-			elemental_damage(shit.draftsman:id(), shit, bone_id, flags)
+			elemental_damage(shit.draftsman:section(), shit, bone_id, flags)
 			flags.ret_value = false
 		end
 
 		if shit.type == hit.shock then
-			elemental_damage(shit.draftsman:id(), shit, bone_id, flags)
+			elemental_damage(shit.draftsman:section(), shit, bone_id, flags)
 			flags.ret_value = false
 		end
 
 		if shit.type == hit.chemical_burn then
-			elemental_damage(shit.draftsman:id(), shit, bone_id, flags)
+			elemental_damage(shit.draftsman:section(), shit, bone_id, flags)
 			flags.ret_value = false
 		end
 		
 		if shit.type == hit.telepatic then
-			 psi_damage(shit.draftsman:id(), shit, bone_id, flags)
-			 flags.ret_value = false
+			psi_damage(shit.draftsman:section(), shit, bone_id, flags)
+			flags.ret_value = false
 		end
 	end
 end
@@ -1193,8 +1233,46 @@ function on_option_change()
 	end
 end
 
+local GActor_OnBeforeHit = _G.CActor__BeforeHitCallback
+_G.CActor__BeforeHitCallback = function(actor, shit, bone_id)
+	flags.ret_value = true
+	
+	-- standard logic needed here since we are essentially overwriting it
+	if (shit.type ~= hit.strike) then
+		if (bind_stalker_ext.invulnerable_time and time_global() < bind_stalker_ext.invulnerable_time) then 
+			bind_stalker_ext.invulnerable_time = bind_stalker_ext.invulnerable_time - 500
+			return false
+		end
+	end
+	
+	if (shit.power > 0) then 
+		if (shit.draftsman and shit.draftsman:id() ~= 0 and IsStalker(shit.draftsman) and shit.draftsman:relation(db.actor) == game_object.friend) then 
+			return false 
+		end
+	end
+	
+	
+	if z_cxv_experience_perk_player_when_hit then
+		z_cxv_experience_perk_player_when_hit.rpg_damage_reduction(shit, bone_id)
+		if shit.power <= 0 then
+			return false
+		end
+	end
+	actor_on_before_hit(shit, bone_id, flags)
+	if flags.ret_value then
+		if shit.power > 0 then
+			SendScriptCallback("actor_on_before_hit", shit, bone_id, flags)
+		else
+			return false
+		end
+	end
+	
+	return flags.ret_value
+end
+
+
 function on_game_start()
-	RegisterScriptCallback("actor_on_before_hit",actor_on_before_hit)
+--	RegisterScriptCallback("actor_on_before_hit",actor_on_before_hit)
 	RegisterScriptCallback("actor_on_first_update",actor_on_first_update)
 	if demonized_ledge_grabbing then
 		RegisterScriptCallback("actor_on_climb_start",actor_on_climb_start)
