@@ -363,6 +363,7 @@ hp_rounds = {
 
 -----------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------
+
 -- Needed for checking monkeypatching in the G functions near bottom of script
 local flags = { ret_value = true }
 
@@ -722,7 +723,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 			spec_monster_mult = 0.85
 		end
 	end
-	
+		
 	-- NOTE: Difficulty index is determined in actor_on_first_update() now
 	
 	-----------------------------------------------------------------------
@@ -933,8 +934,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local falloff_modifier = 1
 	if graze_bullet_dmg_list[bullet_id] and graze_bullet_dmg_list[bullet_id] > 0 then
 		shit.power = graze_bullet_dmg_list[bullet_id]
-	end
-	if IsMelee(wpn) then
+	elseif IsMelee(wpn) then
 		falloff_modifier = 1
 	elseif true_falloff then
 		local weapon_speed 		= utils_item.get_param(sec, wpn and wpn:id(), "bullet_speed", "float", true)
@@ -1715,7 +1715,11 @@ function npc_on_before_hit(npc, shit, bone_id)
 	-- Double the damage if the NPC is wounded
 	-- Still important, but moved up here compared to prev. since we are always guaranteed 20% of base damage
 	if surrender_bonus == 1 then
+		starter_damage = starter_damage * 2
 		resist_damage = resist_damage * 2
+		if graze_bullet_dmg_list[bullet_id] and graze_bullet_dmg_list[bullet_id] > 0 then
+			graze_bullet_dmg_list[bullet_id] = graze_bullet_dmg_list[bullet_id] * 2
+		end
 	end
 	
 	local total_resist_modifier = 1
@@ -1803,6 +1807,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	
 	final_base_damage = final_base_damage * total_ammo_mult * total_locational_modifier * damage_mod
 	
+	shit.power = final_base_damage
 	-- ilrathCXV (01/22/25): Going to SendCallback here to help this mimic GAMMA's damage logic steps (PBA before final reductions)
 	SendScriptCallback("npc_on_before_hit",npc,shit,bone_id, flags)
 	final_base_damage = shit.power
@@ -1973,12 +1978,11 @@ function bullet_on_impact(bullet)
         -- check for existing impact to the target
         local bullet_hit_enemy_list = bullet_store_list[bullet.bullet_id]
         if not bullet_hit_enemy_list then bullet_hit_enemy_list = {} end
-        if not bullet_hit_enemy_list[bullet.bullet_id] then bullet_hit_enemy_list[bullet.target_id] = 0 end
-        
-        CreateTimeEvent("bullet_remove", bullet.bullet_id, 0.1, function()
+        if not bullet_hit_enemy_list[bullet.bullet_id] then bullet_hit_enemy_list[bullet.target_id] = 0 end 
+		CreateTimeEvent("bullet_remove", bullet.bullet_id, 0.1, function()
             bullet_store_list[bullet.bullet_id] = nil
  			return true
-       end)
+		end)
     end
 	
 	-- ilrathCXV: My way of doing bullet handlers
@@ -2103,8 +2107,7 @@ end
 _G.CAI_Stalker__BeforeHitCallback = function(npc,shit,bone_id)
     flags.ret_value = true
     local custom_hit = npc_on_before_hit(npc,shit,bone_id, true)
-    if custom_hit then
-        --SendScriptCallback("npc_on_before_hit",npc,custom_hit.shit,custom_hit.bone_id, flags)
+    if custom_hit then	
 		if flags.ret_value then
 			-- printf("ArtiGrok BO - New hit power: %s", custom_hit.shit.power)
             if custom_hit.shit.type ~= hit.fire_wound and custom_hit.shit.type ~= hit.wound then

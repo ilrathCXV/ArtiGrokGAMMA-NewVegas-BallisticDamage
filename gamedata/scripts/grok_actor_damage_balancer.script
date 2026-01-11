@@ -39,10 +39,10 @@ get_artigork_config 		 	= ballistics_mcm.get_config
 difficulty_scaling_damage 		= (get_artigork_config and get_artigork_config("difficulty_scaling_damage")) or false
 
 local difficulty_multiplier_damage = {
-	[1]  = (difficulty_scaling_damage and 0.65) or 1.0,
-	[2]  = (difficulty_scaling_damage and 0.8) or 1.0,
-	[3]  = (difficulty_scaling_damage and 1.0) or 1.0,
-	[4]  = (difficulty_scaling_damage and 1.2) or 1.0,	
+	[1]  = (get_artigork_config and ((difficulty_scaling_damage and 0.65) or 1.0)) or 0.65,
+	[2]  = (get_artigork_config and ((difficulty_scaling_damage and 0.8) or 1.0)) or 0.8,
+	[3]  = 1.0,
+	[4]  = (get_artigork_config and ((difficulty_scaling_damage and 1.2) or 1.0)) or 1.2,
 }
 
 -- Lists of engine pointers
@@ -188,7 +188,7 @@ local no_pen_dmg_divisors = {
 }
 
 local flags = { ret_value = true }
-local player_died = false
+
 function get_game_factor(key)
 	--printf("Gameplay difficulty factor requested: [" .. key .. "] = " .. tostring(factors_game[key]))
 	return factors_game[key]
@@ -835,11 +835,9 @@ function shit_booster(shit, bone_id, k_ap, hp_rounds)
 		damage = damage * body_part_mult
 	end
 	
-	-- etapomom: run on_before_hit before doing armor math
-	--	local pbadamage = hit(shit)
-	--	PBA_a_obh(pbadamage, bone_id, flags)
-	--	shit.power = pbadamage.power
-		SendScriptCallback("actor_on_before_hit", shit, bone_id, flags)
+	shit.power = damage
+	SendScriptCallback("actor_on_before_hit", shit, bone_id, flags)
+	damage = shit.power
 	
 --	printf('Checking for one-hit protection ... Player HP: %s | Hit Power: %s | DMG > Health?: %s | Health > 65HP?: %s', db.actor.health, damage, damage >= db.actor.health, db.actor.health >= 0.65)
 	-- Resolve mechanic, survive with few hp instead of dying from huge hits
@@ -989,9 +987,9 @@ function psi_damage(draftman_sec, shit, bone_id, flags)
 	snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
 	snd.volume = math.random(40,65)/100
 	shit_booster(shit,bone_id)
---	flags.ret_value = false
 end
 
+local first_hit = 0
 local trigger2 = 0
 local delay2 = 33
 local rad_grace = 1000
@@ -1091,14 +1089,16 @@ function actor_on_before_hit(shit,bone_id, flags)
 		if (shit.type == hit.fire_wound) then
 
 			local ammo_section
-			if shit.draftsman:section() == m_car then
+			local sec
+			if shit.draftsman:section() == "m_car" then
+				sec = "m_car"
 				ammo_section = "ammo_pkm_100"
 			else
 				wpn = level.object_by_id(shit.weapon_id)
 	
 				if wpn == nil then return end
 	
-				local sec = wpn:section()
+				sec = wpn:section()
 				local wpn_id = wpn:id()
 	
 				local ammo_type_number = wpn:get_ammo_type()
@@ -1108,41 +1108,15 @@ function actor_on_before_hit(shit,bone_id, flags)
 				if ammo_section == nil then return end
 			end
 			
-			printf("[ADB] Ammo hitting actor: %s", ammo_section)
+--			printf("[ADB] Ammo hitting actor: %s", ammo_section)
 
 			local hp_rounds = 1
 			
 			if cxv_artigrok_bo then
 				hp_rounds = cxv_artigrok_bo.hp_rounds[ammo_section] or 1
 			end	
---[[
-			if (string.find(ammo_section, "buck")) then
-				printf("/// Reducing buckshots damage")
-				shit.power = shit.power / 3
-			end
 
-			if (string.find(ammo_section, "23x75")) then
-				printf("/// Reducing KS23 damage")
-				shit.power = shit.power / 5
-			end
-
-			if (string.find(ammo_section, "dart")) then
-				printf("/// Reducing AP Slugs damage")
-				shit.power = shit.power / 3
-			end
-
-			if (string.find(ammo_section, "zhekan")) then
-				printf("/// Reducing Slugs damage")
-				shit.power = shit.power / 3
-			end
-
-			if (string.find(ammo_section, "338_federal")) then
-				printf("/// Reducing 308 Federal damage")
-				shit.power = shit.power / 9
-			end
-]]
-
-			printf('actor about to get hit by %s from %s', ammo_section, sec)
+			printf('[ADB] Actor hit by %s from %s', ammo_section, sec)
 			
 			k_ap = ini_sys:r_float_ex(ammo_section, "k_ap") * 10 or 0
 
