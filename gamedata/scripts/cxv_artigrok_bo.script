@@ -27,6 +27,7 @@ true_falloff				= get_config("true_falloff") or true
 difficulty_scaling_damage 	= get_config("difficulty_scaling_damage") or false
 difficulty_scaling_ap 		= get_config("difficulty_scaling_ap") or false
 npc_use_special				= get_config("npc_use_special") or false
+anomaly_damage_unfix		= get_config("anomaly_damage_unfix") or false
 
 local cxv_tick = 60000
 local last_tick = 0
@@ -155,6 +156,15 @@ local npc_difficulty_multiplier_ap = {
 	[3]  = (difficulty_scaling_ap and 1.05) or 1.0,
 	[4]  = (difficulty_scaling_ap and 1.3) or 1.0,
 }
+
+local elemental_hit_types = {
+	[hit.light_burn] = true,
+	[hit.burn] = true,
+	[hit.shock] = true,
+	[hit.chemical_burn] = true,
+	[hit.telepatic] = true,
+}
+
 Bone_IDs = {
 [2]  =	"bip01_pelvis",
 [3]  =	"bip01_l_thigh",
@@ -364,6 +374,20 @@ hp_rounds = {
 -----------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------
 
+-- Hit Numbers experimental
+
+should_show_normal_numbers = true
+hit_numbers_critical = false
+
+local injectHitNumbers = nil
+if hit_numbers then
+	injectHitNumbers = zzzzzzzz_cxv_artigrok_monkeys.injectHitNumbers 	-- (npc, hit_pwr, bone_index, is_critical)
+end
+
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+
+
 -- Needed for checking monkeypatching in the G functions near bottom of script
 local flags = { ret_value = true }
 
@@ -375,7 +399,7 @@ function validate_hit(shit, bone_id, npc_id)
 	if npc_id == get_story_object_id('the_living_fire_prometheus') then return end
 	
 	-- ilrathCXV (04/01/2024): Take MCM option into account
-	if shit.draftsman:id() ~= db.actor:id() then
+	if shit.draftsman:id() ~= AC_ID then
 		if npc_effects and not IsStalker(shit.draftsman) then
 			--printf("ArtiGrok BO - Draftsman is not a Stalker (%s) or the player (%s)", shit.draftsman:id() ~= db.actor:id(), not IsStalker(shit.draftsman))
 			return
@@ -422,6 +446,7 @@ function validate_hit(shit, bone_id, npc_id)
 end
 
 function mutant_on_before_hit(monster, shit, bone_id)
+
 	local validate_data = validate_hit(shit, bone_id, monster:id())
 	if not (validate_data) then
 		--printf("ArtiGrok BO - Hit not valid")
@@ -440,36 +465,39 @@ function mutant_on_before_hit(monster, shit, bone_id)
 	local monster_id = monster:id()
 	
 	-- If a bullet ID exists + has already been recorded, check for monster in the list
-    if bullet_id and bullet_store_list[bullet_id] then
-        
-        local bullet_hit_enemy_list = bullet_store_list[bullet_id]
-		
-		-- If the monster's ID is in the list and equals 0 for this bullet or it doesn't exist for the bullet,
-		-- 		increment/initialize its value to that multi-hits can be ignored later
-		
-        if (bullet_hit_enemy_list[monster_id] and bullet_hit_enemy_list[monster_id] == 0) or (not bullet_hit_enemy_list[monster_id]) then
-            bullet_hit_enemy_list[monster_id] = 1
-		
-		-- If the monster's ID is in the list but it isn't 0, send a no-op. hit and negate its hit power
-        else
-            shit.power = 0.0001
-            return {
-                ["shit"] = shit,
-                ["bone_id"] = bone_id
-            }
-        end 
-        
-    elseif bullet_id and monster then
-        -- Bullet has not been recorded (first enemy to be hit) - create entry in the bullet store list
-		-- Add the current hit monster to the list of enemies hit by this bullet
-        hits = {[monster_id] = 1}
-        bullet_store_list[bullet_id] = hits
-		-- Put a small timer to remove the entry to clean up memory
-        CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
-            bullet_store_list[bullet_id] = nil
-			return true
-        end)
-    end
+    if (not anomaly_damage_unfix) or (anomaly_damage_unfix and (not elemental_hit_types[shit.type])) then
+	
+		if bullet_id and bullet_store_list[bullet_id] then
+			
+			local bullet_hit_enemy_list = bullet_store_list[bullet_id]
+			
+			-- If the monster's ID is in the list and equals 0 for this bullet or it doesn't exist for the bullet,
+			-- 		increment/initialize its value to that multi-hits can be ignored later
+			
+			if (bullet_hit_enemy_list[monster_id] and bullet_hit_enemy_list[monster_id] == 0) or (not bullet_hit_enemy_list[monster_id]) then
+				bullet_hit_enemy_list[monster_id] = 1
+			
+			-- If the monster's ID is in the list but it isn't 0, send a no-op. hit and negate its hit power
+			else
+				shit.power = 0.0001
+				return {
+					["shit"] = shit,
+					["bone_id"] = bone_id
+				}
+			end 
+			
+		elseif bullet_id and monster then
+			-- Bullet has not been recorded (first enemy to be hit) - create entry in the bullet store list
+			-- Add the current hit monster to the list of enemies hit by this bullet
+			hits = {[monster_id] = 1}
+			bullet_store_list[bullet_id] = hits
+			-- Put a small timer to remove the entry to clean up memory
+			CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
+				bullet_store_list[bullet_id] = nil
+				return true
+			end)
+		end
+	end
 	
 	local shooter = shit.draftsman
 	local wpn = validate_data.wpn
@@ -724,6 +752,7 @@ function mutant_on_before_hit(monster, shit, bone_id)
 		end
 	end
 		
+	
 	-- NOTE: Difficulty index is determined in actor_on_first_update() now
 	
 	-----------------------------------------------------------------------
@@ -994,6 +1023,11 @@ function mutant_on_before_hit(monster, shit, bone_id)
 end
 
 function npc_on_before_hit(npc, shit, bone_id)
+
+	-- Hit Numbers: reset variables
+	should_show_normal_numbers = true
+	hit_numbers_critical = false
+
 	local validate_data = validate_hit(shit, bone_id, npc:id())
 	if not (validate_data) then
 		--printf("ArtiGrok BO - Hit not valid")
@@ -1013,35 +1047,37 @@ function npc_on_before_hit(npc, shit, bone_id)
 	local npc_id = npc:id()
 	
 	-- If a bullet ID exists + has already been recorded, check for stalker in the list
-    if bullet_id and bullet_store_list[bullet_id] then
-        local bullet_hit_enemy_list = bullet_store_list[bullet_id]
-		
-		-- If the stalker's ID is in the list and equals 0 for this bullet or it doesn't exist for the bullet,
-		-- 		increment/initialize its value to that multi-hits can be ignored later
-        if (bullet_hit_enemy_list[npc_id] and bullet_hit_enemy_list[npc_id] == 0) or (not bullet_hit_enemy_list[npc_id]) then
-            bullet_hit_enemy_list[npc_id] = 1
+	if (not anomaly_damage_unfix) or (anomaly_damage_unfix and (not elemental_hit_types[shit.type])) then
+		if bullet_id and bullet_store_list[bullet_id] then
+			local bullet_hit_enemy_list = bullet_store_list[bullet_id]
 			
-		-- If the stalker's ID is in the list but it isn't 0, send a no-op. hit and negate its hit power
-        else
-            shit.power = 0.0001
-            return {
-                ["shit"] = shit,
-                ["bone_id"] = bone_id,
-				["surrender_bonus"] = surrender_bonus,
-            }
-        end 
-    elseif bullet_id and npc then
-	
-        -- Bullet has not been recorded (first enemy to be hit) - create entry in the bullet store list
-		-- Add the current hit stalker to the list of enemies hit by this bullet
-        hits = {[npc_id] = 1}
-        bullet_store_list[bullet_id] = hits
-		-- Put a small timer to remove the entry to clean up memory
-        CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
-            bullet_store_list[bullet_id] = nil
-			return true
-		end)
-    end
+			-- If the stalker's ID is in the list and equals 0 for this bullet or it doesn't exist for the bullet,
+			-- 		increment/initialize its value to that multi-hits can be ignored later
+			if (bullet_hit_enemy_list[npc_id] and bullet_hit_enemy_list[npc_id] == 0) or (not bullet_hit_enemy_list[npc_id]) then
+				bullet_hit_enemy_list[npc_id] = 1
+				
+			-- If the stalker's ID is in the list but it isn't 0, send a no-op. hit and negate its hit power
+			else
+				shit.power = 0.0001
+				return {
+					["shit"] = shit,
+					["bone_id"] = bone_id,
+					["surrender_bonus"] = surrender_bonus,
+				}
+			end 
+		elseif bullet_id and npc then
+		
+			-- Bullet has not been recorded (first enemy to be hit) - create entry in the bullet store list
+			-- Add the current hit stalker to the list of enemies hit by this bullet
+			hits = {[npc_id] = 1}
+			bullet_store_list[bullet_id] = hits
+			-- Put a small timer to remove the entry to clean up memory
+			CreateTimeEvent("bullet_remove", bullet_id, 0.1, function()
+				bullet_store_list[bullet_id] = nil
+				return true
+			end)
+		end
+	end
 	
 	local shooter = shit.draftsman
 	local wpn = validate_data.wpn
@@ -1114,7 +1150,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		-- printf("ArtiGrok BO - Ammo section is nil")
 		return
 	end
-
+	
 	-----------------------------------------------------------------------
 	------------------------- Arti's Bonuses ------------------------------
 	-----------------------------------------------------------------------
@@ -1263,6 +1299,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 	end
 	
 	if head_bones[bone_id] then
+		hit_numbers_critical = true
 		bone_id = 15
 	end
 	
@@ -1296,6 +1333,7 @@ function npc_on_before_hit(npc, shit, bone_id)
 		if (tonumber(bone_id) >= 14 and tonumber(bone_id) <= 19) then -- headshot
 			npc_bone_profile_name = ini_bones:r_string(npc_armor_section,"head_profile")
 			is_critical = true
+			hit_numbers_critical = true
 		else -- bodyshot
 			npc_bone_profile_name = ini_bones:r_string(npc_armor_section,"bone_profile")
 		end
@@ -1887,6 +1925,7 @@ function on_option_change()
 		true_falloff 				= get_config("true_falloff") or true
 		difficulty_scaling_damage 	= get_config("difficulty_scaling_damage") or false
 		difficulty_scaling_ap 		= get_config("difficulty_scaling_ap") or false
+		anomaly_damage_unfix 		= get_config("anomaly_damage_unfix") or false
 		
 		difficulty_multiplier_damage = {
 			[1]  = (difficulty_scaling_damage and 1.3) or 1.0,
@@ -1992,6 +2031,11 @@ end
 
 gbo_adb = grok_actor_damage_balancer.actor_on_before_hit
 function grok_actor_damage_balancer.actor_on_before_hit(shit, bone_id, flags)
+	
+	if anomaly_damage_unfix and elemental_hit_types[shit.type] then
+		gbo_adb(shit, bone_id, flags)
+		return
+	end
 	
 	-- checking for multi-hits from recorded hits (e.g. one bullet hitting multiple bones)
     local bullet_id = shit.bullet_id
@@ -2107,15 +2151,28 @@ end
 _G.CAI_Stalker__BeforeHitCallback = function(npc,shit,bone_id)
     flags.ret_value = true
     local custom_hit = npc_on_before_hit(npc,shit,bone_id, true)
+	local hitter_is_actor = shit.draftsman and (shit.draftsman:id() == AC_ID)
     if custom_hit then	
 		if flags.ret_value then
 			-- printf("ArtiGrok BO - New hit power: %s", custom_hit.shit.power)
             if custom_hit.shit.type ~= hit.fire_wound and custom_hit.shit.type ~= hit.wound then
                 shit.power = custom_hit.shit.power
+				if hitter_is_actor and injectHitNumbers then
+					should_show_normal_numbers = false
+					injectHitNumbers(npc, shit.power, bone_id, hit_numbers_critical)
+				end
             else
 				if custom_hit.surrender_bonus == 1 and (custom_hit.shit.power < npc.health) then
+					if hitter_is_actor and injectHitNumbers then
+						should_show_normal_numbers = false
+						injectHitNumbers(npc, npc.health, bone_id, hit_numbers_critical)
+					end
 					npc:set_health_ex(0.0)
 				else
+					if hitter_is_actor and injectHitNumbers then
+						should_show_normal_numbers = false
+						injectHitNumbers(npc, custom_hit.shit.power, bone_id, hit_numbers_critical)
+					end
 					npc:set_health_ex(npc.health - custom_hit.shit.power)
 				end
 				-- printf("Enemy remaining HP: %s", npc.health)
@@ -2137,7 +2194,14 @@ end
 _G.CBaseMonster__BeforeHitCallback = function(monster,shit,bone_id)
     flags.ret_value = true
     -- check for multihit. each bullet can only deal damage once
-
+	
+	-- Hit Numbers (just so numbers on mutants still works)
+	local hitter_is_actor = shit.draftsman and (shit.draftsman:id() == AC_ID)
+	if hitter_is_actor then
+		should_show_normal_numbers = true
+		hit_numbers_critical = false
+	end
+	
     local custom_hit = mutant_on_before_hit(monster,shit,bone_id, false)
     if custom_hit then
         SendScriptCallback("monster_on_before_hit",monster,custom_hit.shit,custom_hit.bone_id, flags)
