@@ -1227,7 +1227,7 @@ _G.CActor__BeforeHitCallback = function(actor, shit, bone_id)
 	
 	
 	if z_cxv_experience_perk_player_when_hit then
-		z_cxv_experience_perk_player_when_hit.rpg_damage_reduction(shit, bone_id)
+		z_cxv_experience_perk_player_when_hit.rpg_damage_reduction(shit, bone_id, flags)
 		if shit.power <= 0 then
 			return false
 		end
